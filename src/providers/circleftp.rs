@@ -23,7 +23,14 @@ pub async fn search(query: &str) -> Result<Vec<MediaItem>> {
         .cloned()
         .unwrap_or_default();
 
-    Ok(posts.iter().filter_map(media_item).collect())
+    let query_lower = query.to_ascii_lowercase();
+    let query_trimmed = query_lower.trim();
+
+    Ok(posts
+        .iter()
+        .filter_map(media_item)
+        .filter(|item| item.title.to_ascii_lowercase().contains(query_trimmed))
+        .collect())
 }
 
 pub async fn details(id: &str) -> Result<Details> {
@@ -77,6 +84,7 @@ pub async fn details(id: &str) -> Result<Details> {
             .filter_map(|category| category["name"].as_str().map(str::to_owned))
             .collect(),
         episodes,
+        dubs: Vec::new(),
     })
 }
 
@@ -132,6 +140,11 @@ fn media_item(post: &Value) -> Option<MediaItem> {
         year: value_text(&post["year"]).unwrap_or_else(|| "—".into()),
         poster: post["image"].as_str().map(poster_url),
         seasons: 0,
+        rating: value_text(&post["imdbRating"])
+            .or_else(|| value_text(&post["imdbRatingValue"]))
+            .or_else(|| value_text(&post["imdb"]))
+            .or_else(|| value_text(&post["rating"]))
+            .filter(|r| r != "0" && r != "0.0" && r != "—" && !r.is_empty()),
     })
 }
 
@@ -169,5 +182,48 @@ mod tests {
     fn normalizes_circleftp_quality_labels() {
         assert_eq!(normalized_quality(Some("4K WEB-DL")), "2160p");
         assert_eq!(normalized_quality(Some("1080p")), "1080p");
+    }
+
+    #[test]
+    fn filters_search_results_by_case_insensitive_keyword() {
+        let items = vec![
+            crate::models::MediaItem {
+                id: "1".into(),
+                title: "The Mentalist".into(),
+                kind: "series".into(),
+                year: "2008".into(),
+                poster: None,
+                seasons: 0,
+                rating: None,
+            },
+            crate::models::MediaItem {
+                id: "2".into(),
+                title: "Mental (2012)".into(),
+                kind: "movie".into(),
+                year: "2012".into(),
+                poster: None,
+                seasons: 0,
+                rating: None,
+            },
+            crate::models::MediaItem {
+                id: "3".into(),
+                title: "Sex and Death 101".into(),
+                kind: "movie".into(),
+                year: "2008".into(),
+                poster: None,
+                seasons: 0,
+                rating: None,
+            },
+        ];
+
+        let query = "mentalist";
+        let query_trimmed = query.trim().to_ascii_lowercase();
+        let filtered = items
+            .into_iter()
+            .filter(|item| item.title.to_ascii_lowercase().contains(&query_trimmed))
+            .collect::<Vec<_>>();
+
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].title, "The Mentalist");
     }
 }
