@@ -18,6 +18,8 @@ pub(super) fn search_results(html: &str, base_url: &str) -> Vec<MediaItem> {
     let meta = selector(".movie-card-meta");
     let image = selector("img");
 
+    let rating_sel = selector(".imdb-score, .score, .rating, .imdb");
+
     document
         .select(&cards)
         .filter_map(|card| {
@@ -28,6 +30,23 @@ pub(super) fn search_results(html: &str, base_url: &str) -> Vec<MediaItem> {
                 .next()
                 .and_then(text_of)
                 .unwrap_or_default();
+            let rating = card
+                .select(&rating_sel)
+                .next()
+                .and_then(text_of)
+                .or_else(|| {
+                    let parts: Vec<&str> = meta_text.split('·').map(str::trim).collect();
+                    for part in parts {
+                        if let Ok(val) = part.parse::<f32>() {
+                            if (1.0..=10.0).contains(&val) {
+                                return Some(part.to_string());
+                            }
+                        }
+                    }
+                    None
+                })
+                .filter(|r| r != "0" && r != "0.0" && r != "—" && !r.is_empty());
+
             Some(MediaItem {
                 id: path_or_url(href, base_url),
                 title,
@@ -44,6 +63,7 @@ pub(super) fn search_results(html: &str, base_url: &str) -> Vec<MediaItem> {
                     .and_then(|image| image.value().attr("src"))
                     .map(|src| absolute_url(src, base_url)),
                 seasons: season_count(&meta_text),
+                rating,
             })
         })
         .collect()
@@ -96,6 +116,7 @@ pub(super) fn details(html: &str, id: &str, base_url: &str) -> Details {
         rating,
         genres,
         episodes,
+        dubs: Vec::new(),
     }
 }
 
