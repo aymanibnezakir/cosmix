@@ -51,9 +51,16 @@
       <h2>Settings</h2><label>Content provider<select id="provider">
           <option value="circleftp">CircleFTP (Fastest, if works)</option>
           <option value="moviebox">MovieBox (Fast)</option>
-          <option value="fourkhdhub">4KHDHub (Top-notch quality)</option>
+          <option value="fourkhdhub">4KHDHub (Heavier but top-notch quality)</option>
         </select></label>
       <p class="hint">Choose your favourite provider</p><button id="save">Save settings</button>
+    </div>
+  </div>
+  <div id="languageModal" class="modal hidden">
+    <div class="dialog language-dialog"><button class="close" data-close>×</button>
+      <h2>Select Audio Language</h2>
+      <p class="hint" id="languageSubtitle">Choose in which language you want to watch</p>
+      <div id="languageList" class="language-list"></div>
     </div>
   </div>
   <div id="streamModal" class="modal hidden">

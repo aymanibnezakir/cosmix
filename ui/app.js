@@ -100,14 +100,31 @@ function formatSpeed(bps) {
     return n.toFixed(0) + " B/s";
 }
 
-/* ── search results ── */
-function resultsHtml(items) { return items.length ? items.map((x, i) => `<button class="card" data-index="${i}"><div class="poster" ${poster(x)}>${x.poster ? "" : "No poster"}</div><h3>${esc(x.title)}</h3><div class="meta">${esc(x.year)} · ${esc(x.kind)}</div></button>`).join("") : "<p class='hint'>No results found.</p>" }
+function resultsHtml(items) {
+    return items.length
+        ? items.map((x, i) => {
+            const hasRating = x.rating && x.rating !== "—" && x.rating !== "0" && x.rating !== "0.0";
+            const ratingBadge = hasRating ? `<span class="card-rating">★ ${esc(x.rating)}</span>` : "";
+            const ratingMeta = hasRating ? ` · ★ ${esc(x.rating)}` : "";
+            return `
+                <button class="card" data-index="${i}">
+                    <div class="poster" ${poster(x)}>
+                        ${ratingBadge}
+                        ${x.poster ? "" : "No poster"}
+                    </div>
+                    <h3>${esc(x.title)}</h3>
+                    <div class="meta">${esc(x.year)} · ${esc(x.kind)}${ratingMeta}</div>
+                </button>
+            `;
+        }).join("")
+        : "<p class='hint'>No results found.</p>";
+}
 function bindResultCards(items) { $("#results").querySelectorAll(".card").forEach(b => b.onclick = () => details(items[+b.dataset.index])) }
 
 /* ── detail view ── */
 function detailHtml(d) {
     let episodesBlock = "";
-    if (d.episodes.length) {
+    if (d.episodes && d.episodes.length) {
         const seasons = new Map();
         for (const e of d.episodes) {
             if (!seasons.has(e.season)) seasons.set(e.season, []);
@@ -118,9 +135,43 @@ function detailHtml(d) {
         ).join("");
         episodesBlock = `<div class="episodes"><h2>Episodes</h2>${seasonBlocks}</div>`;
     }
-    return `<div class="hero"><div class="poster" ${poster(d)}>${d.poster ? "" : "No poster"}</div><div><div class="badges">${esc(d.kind.toUpperCase())} · ${esc(d.year)} · ${esc(d.rating)}</div><h1>${esc(d.title)}</h1><div class="meta">${d.genres.map(esc).join(" · ")}</div><p class="copy">${esc(d.synopsis)}</p>${d.kind !== "series" ? '<div class="actions"><button id="playMovie">Select stream</button></div>' : ""}</div></div>${episodesBlock}`;
+    const dubsLine = (d.dubs && d.dubs.length > 1 && state.provider === "moviebox")
+        ? `<div class="dubs-badge-container"><span>Audio:</span> ${d.dubs.map(dub => esc(dub.language)).join(" · ")}</div>`
+        : "";
+    return `<div class="hero"><div class="poster" ${poster(d)}>${d.poster ? "" : "No poster"}</div><div><div class="badges">${esc(d.kind.toUpperCase())} · ${esc(d.year)} · ${esc(d.rating)}</div><h1>${esc(d.title)}</h1><div class="meta">${d.genres.map(esc).join(" · ")}</div>${dubsLine}<p class="copy">${esc(d.synopsis)}</p>${d.kind !== "series" ? '<div class="actions"><button id="playMovie">Select stream</button></div>' : ""}</div></div>${episodesBlock}`;
 }
-function bindDetailActions(d) { state.details = d; $("#playMovie")?.addEventListener("click", () => streams()); $("#detail").querySelectorAll(".episode").forEach(b => b.onclick = () => streams(+b.dataset.se, +b.dataset.ep)) }
+function bindDetailActions(d) {
+    state.details = d;
+    $("#playMovie")?.addEventListener("click", () => promptLanguageOrStream());
+    $("#detail").querySelectorAll(".episode").forEach(b => {
+        b.onclick = () => promptLanguageOrStream(+b.dataset.se, +b.dataset.ep);
+    });
+}
+
+function promptLanguageOrStream(season = null, episode = null) {
+    const d = state.details;
+    if (state.provider === "moviebox" && d.dubs && d.dubs.length > 1) {
+        const episodeText = (season != null && episode != null) ? ` for S${String(season).padStart(2, '0')} · E${String(episode).padStart(2, '0')}` : "";
+        $("#languageSubtitle").textContent = `Choose Audio${episodeText}`;
+        $("#languageList").innerHTML = d.dubs.map(dub => {
+            const isOrig = dub.language.includes("(Original)") || dub.language.startsWith("Original");
+            const origClass = isOrig ? " is-original" : "";
+            return `<button class="language-btn${origClass}" data-id="${esc(dub.id)}">${esc(dub.language)}</button>`;
+        }).join("");
+
+        $("#languageModal").classList.remove("hidden");
+
+        $("#languageList").querySelectorAll(".language-btn").forEach(b => {
+            b.onclick = () => {
+                $("#languageModal").classList.add("hidden");
+                const targetId = b.dataset.id;
+                streams(season, episode, targetId);
+            };
+        });
+    } else {
+        streams(season, episode, d.id);
+    }
+}
 
 /* ── search ── */
 async function search() { const query = $("#query").value.trim(); if (!query) return; $("#welcome").classList.add("hidden"); $("#detail").classList.add("hidden"); const box = $("#results"); box.classList.remove("hidden"); box.innerHTML = "<p class='hint'>Searching…</p>"; try { const items = await invoke("search", { provider: state.provider, query }); const html = resultsHtml(items); box.innerHTML = html; bindResultCards(items); pushNav("results", { html, items }) } catch (e) { box.innerHTML = ""; toast(String(e)) } }
@@ -129,13 +180,14 @@ async function search() { const query = $("#query").value.trim(); if (!query) re
 async function details(item) { $("#results").classList.add("hidden"); const box = $("#detail"); box.classList.remove("hidden"); box.innerHTML = "<p class='hint'>Loading details…</p>"; try { const d = await invoke("get_details", { provider: state.provider, id: item.id }); const html = detailHtml(d); box.innerHTML = html; bindDetailActions(d); pushNav("detail", { html, detail: d }) } catch (e) { toast(String(e)); $("#welcome").classList.remove("hidden"); box.classList.add("hidden") } }
 
 /* ── streams (with Play + Download buttons) ── */
-async function streams(season = null, episode = null) {
+async function streams(season = null, episode = null, targetId = null) {
     const d = state.details;
+    const activeId = targetId || d.id;
     const episodeLabel = (season != null && episode != null) ? `S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}` : null;
     $("#streamModal").classList.remove("hidden");
     $("#streamList").innerHTML = "<p class='hint'>Finding available streams…</p>";
     try {
-        const list = await invoke("get_streams", { provider: state.provider, id: d.id, season, episode });
+        const list = await invoke("get_streams", { provider: state.provider, id: activeId, season, episode });
         if (!list.length) {
             $("#streamList").innerHTML = "<p class='hint'>No playable stream was returned.</p>";
             return;
@@ -147,8 +199,8 @@ async function streams(season = null, episode = null) {
                     <span class="stream-label">${esc(s.label)}</span>
                 </div>
                 <div class="stream-actions">
-                    <button class="stream-play" data-i="${i}">▶ Play in VLC</button>
-                    <button class="stream-download" data-i="${i}">⬇ Download (${formatSize(s.sizeBytes)})</button>
+                    <button class="stream-play" data-i="${i}">Play in VLC</button>
+                    <button class="stream-download" data-i="${i}">Download (${formatSize(s.sizeBytes)})</button>
                 </div>
             </div>
         `).join("");
@@ -234,7 +286,7 @@ function renderDownloadEntry(dl) {
             const sizeText = `${formatSize(s.downloaded)}${s.total ? " / " + formatSize(s.total) : ""}`;
             const barWidth = pct != null ? `${pct}%` : "100%";
             const barClass = pct != null ? "dl-progress-fill" : "dl-progress-fill indeterminate";
-            statusHtml = `<span class="dl-status status-downloading">⬇ Downloading ${pctText}</span>`;
+            statusHtml = `<span class="dl-status status-downloading">Downloading ${pctText}</span>`;
             progressHtml = `<div class="dl-progress"><div class="${barClass}" style="width:${barWidth}"></div></div>`;
             actionsHtml = `
                 <span class="dl-speed">${formatSpeed(s.speedBps ?? s.speed_bps)} · ${sizeText}</span>
