@@ -211,7 +211,6 @@ async function streams(season = null, episode = null, targetId = null) {
                 try {
                     const s = list[+b.dataset.i];
                     await invoke("play_in_vlc", { url: s.url, headers: s.headers });
-                    $("#streamModal").classList.add("hidden");
                     toast("Opening VLC…");
                 } catch (e) { toast(String(e)); }
             };
@@ -229,7 +228,6 @@ async function streams(season = null, episode = null, targetId = null) {
                         url: s.url,
                         headers: s.headers
                     });
-                    $("#streamModal").classList.add("hidden");
                     toast("Download started: " + d.title + (episodeLabel ? " " + episodeLabel : ""));
                 } catch (e) { toast(String(e)); }
             };
