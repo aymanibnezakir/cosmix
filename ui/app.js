@@ -348,6 +348,7 @@ function bindDownloadActions() {
 }
 
 /* ── event bindings ── */
+document.addEventListener("contextmenu", e => e.preventDefault());
 $("#searchForm").onsubmit = e => { e.preventDefault(); search() };
 $("#settings").onclick = () => $("#modal").classList.remove("hidden");
 $("#downloads").onclick = () => openDownloadsPanel();
