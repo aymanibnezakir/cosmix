@@ -174,7 +174,7 @@ function promptLanguageOrStream(season = null, episode = null) {
 }
 
 /* ── search ── */
-async function search() { const query = $("#query").value.trim(); if (!query) return; $("#welcome").classList.add("hidden"); $("#detail").classList.add("hidden"); const box = $("#results"); box.classList.remove("hidden"); box.innerHTML = "<p class='hint'>Searching…</p>"; try { const items = await invoke("search", { provider: state.provider, query }); const html = resultsHtml(items); box.innerHTML = html; bindResultCards(items); pushNav("results", { html, items }) } catch (e) { box.innerHTML = ""; toast(String(e)) } }
+async function search() { $("#query").blur(); const query = $("#query").value.trim(); if (!query) return; $("#welcome").classList.add("hidden"); $("#detail").classList.add("hidden"); const box = $("#results"); box.classList.remove("hidden"); box.innerHTML = "<p class='hint'>Searching…</p>"; try { const items = await invoke("search", { provider: state.provider, query }); const html = resultsHtml(items); box.innerHTML = html; bindResultCards(items); pushNav("results", { html, items }) } catch (e) { box.innerHTML = ""; toast(String(e)) } }
 
 /* ── details ── */
 async function details(item) { $("#results").classList.add("hidden"); const box = $("#detail"); box.classList.remove("hidden"); box.innerHTML = "<p class='hint'>Loading details…</p>"; try { const d = await invoke("get_details", { provider: state.provider, id: item.id }); const html = detailHtml(d); box.innerHTML = html; bindDetailActions(d); pushNav("detail", { html, detail: d }) } catch (e) { toast(String(e)); $("#welcome").classList.remove("hidden"); box.classList.add("hidden") } }
@@ -189,7 +189,7 @@ async function streams(season = null, episode = null, targetId = null) {
     try {
         const list = await invoke("get_streams", { provider: state.provider, id: activeId, season, episode });
         if (!list.length) {
-            $("#streamList").innerHTML = "<p class='hint'>No playable stream was returned.</p>";
+            $("#streamList").innerHTML = "<p class='hint'>Sorry, couldn't find any playable stream.</p>";
             return;
         }
         $("#streamList").innerHTML = list.map((s, i) => `
