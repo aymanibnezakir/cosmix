@@ -10,7 +10,7 @@ pub(super) async fn resolve_and_preflight(
     client: &Client,
     resolver_url: &str,
     headers: &[StreamHeader],
-) -> Option<String> {
+) -> Option<(String, Option<u64>)> {
     let candidates = if resolver_url.contains("hubcloud.") {
         resolve_hubcloud(client, resolver_url).await
     } else if resolver_url.contains("hubdrive.") {
@@ -20,8 +20,8 @@ pub(super) async fn resolve_and_preflight(
     };
 
     for candidate in candidates {
-        if let Some(url) = preflight(client, &candidate, headers).await {
-            return Some(url);
+        if let Some((url, size_bytes)) = preflight(client, &candidate, headers).await {
+            return Some((url, size_bytes));
         }
     }
     None
@@ -145,12 +145,32 @@ fn script_urls(html: &str) -> Vec<String> {
     urls
 }
 
-async fn preflight(client: &Client, raw_url: &str, headers: &[StreamHeader]) -> Option<String> {
+async fn preflight(
+    client: &Client,
+    raw_url: &str,
+    headers: &[StreamHeader],
+) -> Option<(String, Option<u64>)> {
+    probe_url(client, raw_url, headers, 0).await
+}
+
+async fn probe_url(
+    client: &Client,
+    raw_url: &str,
+    headers: &[StreamHeader],
+    depth: usize,
+) -> Option<(String, Option<u64>)> {
+    if depth > 3 {
+        return None;
+    }
     let url = normalize_pixeldrain_ref(raw_url)?;
     if !valid_playback_url(&url) {
         return None;
     }
-    let mut request = client.get(&url).header("Range", "bytes=0-");
+    let mut request = client
+        .get(&url)
+        .header("Range", "bytes=0-0")
+        .header("Accept", "*/*")
+        .header("Accept-Encoding", "identity");
     for header in headers {
         request = request.header(&header.name, &header.value);
     }
@@ -162,6 +182,7 @@ async fn preflight(client: &Client, raw_url: &str, headers: &[StreamHeader]) -> 
         .and_then(|value| value.to_str().ok())
         .unwrap_or_default()
         .to_ascii_lowercase();
+
     if ["text/html", "application/zip", "text/plain"]
         .iter()
         .any(|bad| content_type.starts_with(bad))
@@ -172,9 +193,40 @@ async fn preflight(client: &Client, raw_url: &str, headers: &[StreamHeader]) -> 
             .find(|(key, _)| key == "link")?
             .1
             .into_owned();
-        return valid_playback_url(&link).then_some(link);
+
+        if let Some(res) = Box::pin(probe_url(client, &link, headers, depth + 1)).await {
+            return Some(res);
+        }
+        return valid_playback_url(&link).then_some((link, None));
     }
-    valid_playback_url(&final_url).then_some(final_url)
+
+    let size_bytes = parse_response_size(&response);
+    valid_playback_url(&final_url).then_some((final_url, size_bytes))
+}
+
+fn parse_response_size(response: &reqwest::Response) -> Option<u64> {
+    if let Some(range_header) = response.headers().get(reqwest::header::CONTENT_RANGE) {
+        if let Ok(range_str) = range_header.to_str() {
+            if let Some(size) = parse_content_range_total(range_str) {
+                return Some(size);
+            }
+        }
+    }
+    if response.status() == reqwest::StatusCode::OK {
+        if let Some(length_header) = response.headers().get(reqwest::header::CONTENT_LENGTH) {
+            if let Ok(length_str) = length_header.to_str() {
+                if let Ok(size) = length_str.trim().parse::<u64>() {
+                    return Some(size);
+                }
+            }
+        }
+    }
+    None
+}
+
+fn parse_content_range_total(header_val: &str) -> Option<u64> {
+    let (_, total) = header_val.rsplit_once('/')?;
+    total.trim().parse::<u64>().ok()
 }
 
 fn normalize_pixeldrain(raw: String) -> Option<String> {
@@ -257,7 +309,7 @@ fn absolute_url(raw: &str, base: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_pixeldrain_ref, valid_playback_url};
+    use super::{normalize_pixeldrain_ref, parse_content_range_total, valid_playback_url};
     #[test]
     fn normalizes_pixeldrain_share_url() {
         assert_eq!(
@@ -268,5 +320,17 @@ mod tests {
     #[test]
     fn rejects_local_playback_urls() {
         assert!(!valid_playback_url("https://127.0.0.1/video.mp4"));
+    }
+    #[test]
+    fn parses_content_range_size() {
+        assert_eq!(
+            parse_content_range_total("bytes 0-0/5368709120"),
+            Some(5368709120)
+        );
+        assert_eq!(
+            parse_content_range_total("bytes 0-1023/1048576"),
+            Some(1048576)
+        );
+        assert_eq!(parse_content_range_total("bytes */*"), None);
     }
 }
