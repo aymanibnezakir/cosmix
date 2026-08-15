@@ -457,13 +457,60 @@ main {
 }
 
 .streams {
-    width: min(650px, 92vw)
+    width: min(650px, 92vw);
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.streams h2 {
+    flex-shrink: 0;
+    margin-bottom: 8px;
+}
+
+#streamList {
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    padding-right: 6px;
+    margin-right: -4px;
+    scrollbar-width: thin;
+    scrollbar-color: #393a40 #18191d;
+}
+
+#streamList::-webkit-scrollbar,
+.downloads-dialog::-webkit-scrollbar,
+.language-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+#streamList::-webkit-scrollbar-track,
+.downloads-dialog::-webkit-scrollbar-track,
+.language-list::-webkit-scrollbar-track {
+    background: #18191d;
+    border-radius: 3px;
+}
+
+#streamList::-webkit-scrollbar-thumb,
+.downloads-dialog::-webkit-scrollbar-thumb,
+.language-list::-webkit-scrollbar-thumb {
+    background: #393a40;
+    border-radius: 3px;
+}
+
+#streamList::-webkit-scrollbar-thumb:hover,
+.downloads-dialog::-webkit-scrollbar-thumb:hover,
+.language-list::-webkit-scrollbar-thumb:hover {
+    background: #4f5058;
 }
 
 /* ── Language selection modal ── */
 
 .language-dialog {
     width: min(360px, 88vw);
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
 }
 
 .language-list {
@@ -471,6 +518,12 @@ main {
     flex-direction: column;
     gap: 8px;
     margin-top: 16px;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    padding-right: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: #393a40 #18191d;
 }
 
 .language-btn {
