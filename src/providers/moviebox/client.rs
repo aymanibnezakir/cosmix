@@ -6,7 +6,7 @@ use url::Url;
 
 use crate::{
     error::{AppError, Result},
-    models::{Details, Episode, MediaItem, Stream},
+    models::{Details, Dub, Episode, MediaItem, Stream},
 };
 
 use super::crypto::{DeviceProfile, client_token, request_signature, timestamp_ms};
@@ -70,16 +70,58 @@ impl MovieBoxClient {
             )
             .await?;
 
-        let mut results = Vec::new();
+        let mut results: Vec<MediaItem> = Vec::new();
+        let mut is_dub_list: Vec<bool> = Vec::new();
+
         for group in response["results"].as_array().into_iter().flatten() {
             for subject in group["subjects"].as_array().into_iter().flatten() {
+                let subject_type = subject["subjectType"].as_i64().unwrap_or(1);
+                if subject_type != 1 && subject_type != 2 {
+                    continue;
+                }
+
                 if let Some(item) = media_item(subject) {
-                    if let Some(existing) = results.iter_mut().find(|entry: &&mut MediaItem| {
-                        entry.title == item.title && entry.kind == item.kind
+                    let raw_title = subject["title"].as_str().unwrap_or("");
+                    let corner = subject["corner"].as_str().unwrap_or("");
+                    let is_dub = is_dub_entry(raw_title, corner);
+
+                    if let Some(idx) = results.iter().position(|entry| {
+                        if entry.id == item.id {
+                            return true;
+                        }
+                        if entry.title.eq_ignore_ascii_case(&item.title) && entry.kind == item.kind {
+                            if item.kind == "series" {
+                                return true;
+                            }
+                            return entry.year == item.year || entry.year == "—" || item.year == "—";
+                        }
+                        false
                     }) {
-                        existing.seasons = existing.seasons.max(item.seasons);
+                        results[idx].seasons = results[idx].seasons.max(item.seasons);
+
+                        // For series, prefer the earliest release year (e.g. premiere year 2008 over 2014)
+                        if item.kind == "series" && item.year != "—" {
+                            if results[idx].year == "—" || item.year < results[idx].year {
+                                results[idx].year = item.year.clone();
+                            }
+                        }
+
+                        // If the existing entry was a dub, but this new item is original, replace metadata
+                        if is_dub_list[idx] && !is_dub {
+                            let seasons = results[idx].seasons;
+                            let year = if item.kind == "series" && results[idx].year != "—" && results[idx].year < item.year {
+                                results[idx].year.clone()
+                            } else {
+                                item.year.clone()
+                            };
+                            results[idx] = item;
+                            results[idx].seasons = seasons;
+                            results[idx].year = year;
+                            is_dub_list[idx] = false;
+                        }
                     } else {
                         results.push(item);
+                        is_dub_list.push(is_dub);
                     }
                 }
             }
@@ -111,6 +153,8 @@ impl MovieBoxClient {
             Vec::new()
         };
 
+        let dubs = parse_dubs(&data);
+
         Ok(Details {
             id: item.id,
             title: item.title,
@@ -125,6 +169,7 @@ impl MovieBoxClient {
             rating: value_text(&data["imdbRatingValue"]).unwrap_or_else(|| "—".into()),
             genres: string_values(&data["genre"]),
             episodes,
+            dubs,
         })
     }
 
@@ -187,8 +232,28 @@ impl MovieBoxClient {
     }
 
     async fn series_streams(&mut self, id: &str, season: u32, episode: u32) -> Result<Vec<Stream>> {
-        // collectionResolutions is fetched before per-episode requests, as in
-        // the source analysis. A no-resolution fallback serves older entries.
+        let seasons = self
+            .request(
+                Method::GET,
+                &format!("/wefeed-mobile-bff/subject-api/season-info?subjectId={id}"),
+                None,
+            )
+            .await
+            .ok()
+            .and_then(|response| response["seasons"].as_array().cloned())
+            .unwrap_or_default();
+
+        let mut absolute_episode = 0;
+        for s in &seasons {
+            let s_num = s["se"].as_u64().unwrap_or(0) as u32;
+            let max_ep = s["maxEp"].as_u64().unwrap_or(0) as u32;
+            if s_num < season {
+                absolute_episode += max_ep;
+            }
+        }
+        absolute_episode += episode.saturating_sub(1);
+        let estimated_page = (absolute_episode / 20) + 1;
+
         let initial = self.resource_request(id, None, None, 1, None).await?;
         let mut resolutions = initial["collectionResolutions"]
             .as_array()
@@ -203,7 +268,10 @@ impl MovieBoxClient {
         }
 
         let mut streams = Vec::new();
-        for page in 1..=60 {
+        let start_page = estimated_page.saturating_sub(1).max(1);
+        let end_page = start_page + 10;
+
+        for page in start_page..=end_page {
             let mut page_has_more = false;
             for resolution in &resolutions {
                 let response = self
@@ -216,20 +284,68 @@ impl MovieBoxClient {
                     )
                     .await?;
                 page_has_more |= has_more(&response);
-                streams.extend(
-                    streams_from_response(&response)
-                        .into_iter()
-                        .filter(|stream| {
-                            // The server normally scopes this endpoint itself; stream
-                            // IDs are preserved even when metadata omits se/ep.
-                            !stream.url.is_empty()
-                        }),
-                );
+
+                if let Some(list) = response["list"].as_array() {
+                    for resource in list {
+                        let item_se = resource["se"].as_u64().map(|v| v as u32);
+                        let item_ep = resource["ep"].as_u64().map(|v| v as u32);
+
+                        if let (Some(se), Some(ep)) = (item_se, item_ep) {
+                            if se != season || ep != episode {
+                                continue;
+                            }
+                        }
+
+                        if let Some(stream) = stream_from_resource(resource) {
+                            streams.push(stream);
+                        }
+                    }
+                }
             }
             if !streams.is_empty() || !page_has_more {
                 break;
             }
         }
+
+        // Fallback: scan remaining pages from 1 to start_page if not found in the estimated window
+        if streams.is_empty() && start_page > 1 {
+            for page in 1..start_page {
+                let mut page_has_more = false;
+                for resolution in &resolutions {
+                    let response = self
+                        .resource_request(
+                            id,
+                            Some(season),
+                            Some(episode),
+                            page,
+                            (*resolution != 0).then_some(*resolution),
+                        )
+                        .await?;
+                    page_has_more |= has_more(&response);
+
+                    if let Some(list) = response["list"].as_array() {
+                        for resource in list {
+                            let item_se = resource["se"].as_u64().map(|v| v as u32);
+                            let item_ep = resource["ep"].as_u64().map(|v| v as u32);
+
+                            if let (Some(se), Some(ep)) = (item_se, item_ep) {
+                                if se != season || ep != episode {
+                                    continue;
+                                }
+                            }
+
+                            if let Some(stream) = stream_from_resource(resource) {
+                                streams.push(stream);
+                            }
+                        }
+                    }
+                }
+                if !streams.is_empty() || !page_has_more {
+                    break;
+                }
+            }
+        }
+
         Ok(deduplicate_and_sort(streams))
     }
 
@@ -385,20 +501,223 @@ fn media_item(value: &Value) -> Option<MediaItem> {
             .or(value["pic"].as_str())
             .map(str::to_owned),
         seasons: value["season"].as_u64().unwrap_or(0) as u32,
+        rating: value_text(&value["imdbRatingValue"])
+            .or_else(|| value_text(&value["imdbRating"]))
+            .or_else(|| value_text(&value["rating"]))
+            .filter(|r| r != "0" && r != "0.0" && r != "—" && !r.is_empty()),
     })
 }
 
 fn clean_title(raw: &str) -> String {
-    let without_bracket = raw.split(" [").next().unwrap_or(raw).trim();
-    let lower = without_bracket.to_ascii_lowercase();
-    for suffix in [" (dub)", " (hindi)"] {
-        if lower.ends_with(suffix) {
-            return without_bracket[..without_bracket.len() - suffix.len()]
-                .trim()
-                .to_owned();
+    let mut title = raw.trim().to_string();
+
+    // 1. Strip bracketed expressions, e.g. [Hindi], [Dual Audio], [Tamil], etc.
+    while let Some(start) = title.find('[') {
+        if let Some(end) = title[start..].find(']') {
+            let before = title[..start].to_string();
+            let after = title[start + end + 1..].to_string();
+            title = format!("{before} {after}").trim().to_string();
+        } else {
+            title = title[..start].trim().to_string();
         }
     }
-    without_bracket.to_owned()
+
+    // 2. Strip parenthetical expressions that indicate dubs or seasons, e.g. (Hindi Dub), (Dubbed), (Hindi)
+    while let Some(start) = title.find('(') {
+        if let Some(end) = title[start..].find(')') {
+            let inside = title[start + 1..start + end].trim();
+            if is_dub_or_season_tag(inside) {
+                let before = title[..start].to_string();
+                let after = title[start + end + 1..].to_string();
+                title = format!("{before} {after}").trim().to_string();
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    // 3. Strip trailing season indicators like "S01-02", "S01-S05", "S01", "S1", "Season 1"
+    let mut words: Vec<String> = title.split_whitespace().map(|s| s.to_string()).collect();
+    while let Some(last) = words.last() {
+        if is_season_tag(last) {
+            words.pop();
+        } else {
+            break;
+        }
+    }
+    let cleaned = words.join(" ");
+    let cleaned = cleaned
+        .trim_end_matches(|c| c == '-' || c == ':' || c == '|' || c == ',' || c == '.')
+        .trim();
+
+    if cleaned.is_empty() {
+        raw.trim().to_owned()
+    } else {
+        cleaned.to_owned()
+    }
+}
+
+fn is_dub_or_season_tag(tag: &str) -> bool {
+    let lower = tag.to_ascii_lowercase();
+    lower.contains("dub")
+        || lower.contains("audio")
+        || lower.contains("hindi")
+        || lower.contains("tamil")
+        || lower.contains("telugu")
+        || lower.contains("spanish")
+        || lower.contains("english")
+        || lower.contains("french")
+        || lower.contains("german")
+        || lower.contains("portuguese")
+        || lower.contains("sub")
+        || lower.contains("season")
+        || is_season_tag(&lower)
+}
+
+fn is_season_tag(word: &str) -> bool {
+    let lower = word.to_ascii_lowercase();
+    let lower = lower.trim_matches(|c: char| !c.is_alphanumeric() && c != '-');
+    if lower.starts_with('s') && lower.len() >= 2 {
+        let rest = &lower[1..];
+        if rest.chars().all(|c| c.is_ascii_digit() || c == '-' || c == 's') {
+            return true;
+        }
+    }
+    if lower.starts_with("season") {
+        return true;
+    }
+    false
+}
+
+fn is_dub_entry(raw_title: &str, corner: &str) -> bool {
+    if !corner.is_empty() {
+        return true;
+    }
+    if raw_title.contains('[') || raw_title.contains(']') {
+        return true;
+    }
+    let lower = raw_title.to_ascii_lowercase();
+    lower.contains("dub")
+        || lower.contains("hindi")
+        || lower.contains("tamil")
+        || lower.contains("telugu")
+        || lower.contains("dual audio")
+        || lower.contains("multi audio")
+}
+
+fn resolve_language_name(code: &str) -> Option<&'static str> {
+    match code.to_ascii_lowercase().as_str() {
+        "en" | "eng" => Some("English"),
+        "hi" | "hin" => Some("Hindi"),
+        "es" | "spa" => Some("Spanish"),
+        "esla" => Some("Spanish (Latin America)"),
+        "pt" | "por" => Some("Portuguese"),
+        "ptbr" => Some("Portuguese (Brazil)"),
+        "ta" | "tam" => Some("Tamil"),
+        "te" | "tel" => Some("Telugu"),
+        "ml" | "mal" => Some("Malayalam"),
+        "kn" | "kan" => Some("Kannada"),
+        "bn" | "ben" => Some("Bengali"),
+        "fr" | "fra" | "fre" => Some("French"),
+        "de" | "deu" | "ger" => Some("German"),
+        "it" | "ita" => Some("Italian"),
+        "ja" | "jpn" => Some("Japanese"),
+        "ko" | "kor" => Some("Korean"),
+        "ru" | "rus" => Some("Russian"),
+        "zh" | "zho" | "chi" => Some("Chinese"),
+        "id" | "ind" => Some("Indonesian"),
+        "th" | "tha" => Some("Thai"),
+        "vi" | "vie" => Some("Vietnamese"),
+        "tr" | "tur" => Some("Turkish"),
+        "ar" | "ara" => Some("Arabic"),
+        _ => None,
+    }
+}
+
+fn format_language_name(lan_name: &str, lan_code: &str, original: bool) -> String {
+    let lower_name = lan_name.to_ascii_lowercase();
+
+    if original
+        || lower_name == "original"
+        || lower_name == "original audio"
+        || lower_name.starts_with("original")
+    {
+        if let Some(lang) = resolve_language_name(lan_code) {
+            return format!("{lang} (Original)");
+        }
+        if let Some(start) = lan_name.find('(') {
+            if let Some(end) = lan_name[start..].find(')') {
+                let inside = lan_name[start + 1..start + end].trim();
+                if !inside.is_empty() {
+                    return format!("{inside} (Original)");
+                }
+            }
+        }
+        return "Original Audio".to_string();
+    }
+
+    if let Some(lang) = resolve_language_name(lan_code) {
+        return lang.to_string();
+    }
+
+    if !lan_name.is_empty() {
+        let name = lan_name.trim();
+        let clean = if let Some(stripped) = name.strip_suffix(" dub") {
+            stripped
+        } else if let Some(stripped) = name.strip_suffix(" Dub") {
+            stripped
+        } else {
+            name
+        };
+        let words: Vec<String> = clean
+            .split_whitespace()
+            .map(|w| {
+                let mut c = w.chars();
+                match c.next() {
+                    None => String::new(),
+                    Some(first) => first.to_uppercase().collect::<String>() + c.as_str(),
+                }
+            })
+            .collect();
+        words.join(" ")
+    } else if !lan_code.is_empty() {
+        lan_code.to_uppercase()
+    } else {
+        "Dubbed".to_string()
+    }
+}
+
+fn parse_dubs(data: &Value) -> Vec<Dub> {
+    let mut dubs = Vec::new();
+    let mut seen_ids = HashSet::new();
+
+    if let Some(items) = data["dubs"].as_array() {
+        for item in items {
+            if let Some(subject_id) = item["subjectId"].as_str() {
+                if seen_ids.insert(subject_id.to_string()) {
+                    let lan_name = item["lanName"].as_str().unwrap_or("");
+                    let lan_code = item["lanCode"].as_str().unwrap_or("");
+                    let original = item["original"].as_bool().unwrap_or(false);
+                    let language = format_language_name(lan_name, lan_code, original);
+                    dubs.push(Dub {
+                        id: subject_id.to_string(),
+                        language,
+                    });
+                }
+            }
+        }
+    }
+
+    // Sort dubs so Original audio is at the top, then alphabetically
+    dubs.sort_by(|a, b| {
+        let a_orig = a.language.contains("(Original)") || a.language.starts_with("Original");
+        let b_orig = b.language.contains("(Original)") || b.language.starts_with("Original");
+        b_orig.cmp(&a_orig).then_with(|| a.language.cmp(&b.language))
+    });
+
+    dubs
 }
 
 fn search_rank(item: &MediaItem, query: &str) -> (u8, u8) {
@@ -434,36 +753,41 @@ fn episodes_from_season(season: &Value) -> Vec<Episode> {
         .collect()
 }
 
+fn stream_from_resource(resource: &Value) -> Option<Stream> {
+    let url = resource["resourceLink"].as_str()?.to_owned();
+    if url.is_empty() {
+        return None;
+    }
+    let size_bytes = resource["size"]
+        .as_str()
+        .and_then(|s| s.parse::<u64>().ok())
+        .or_else(|| resource["size"].as_u64());
+    Some(Stream {
+        id: resource["resourceId"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned(),
+        label: resource["title"]
+            .as_str()
+            .or(resource["fileName"].as_str())
+            .unwrap_or("Stream")
+            .to_owned(),
+        resolution: resource["resolution"]
+            .as_u64()
+            .map(|value| format!("{value}p"))
+            .unwrap_or_else(|| "Auto".into()),
+        url,
+        headers: vec![],
+        size_bytes,
+    })
+}
+
 fn streams_from_response(response: &Value) -> Vec<Stream> {
     response["list"]
         .as_array()
         .into_iter()
         .flatten()
-        .filter_map(|resource| {
-            let url = resource["resourceLink"].as_str()?.to_owned();
-            let size_bytes = resource["size"]
-                .as_str()
-                .and_then(|s| s.parse::<u64>().ok())
-                .or_else(|| resource["size"].as_u64());
-            Some(Stream {
-                id: resource["resourceId"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .to_owned(),
-                label: resource["title"]
-                    .as_str()
-                    .or(resource["fileName"].as_str())
-                    .unwrap_or("Stream")
-                    .to_owned(),
-                resolution: resource["resolution"]
-                    .as_u64()
-                    .map(|value| format!("{value}p"))
-                    .unwrap_or_else(|| "Auto".into()),
-                url,
-                headers: vec![],
-                size_bytes,
-            })
-        })
+        .filter_map(stream_from_resource)
         .collect()
 }
 
@@ -478,10 +802,6 @@ fn deduplicate_and_sort(streams: Vec<Stream>) -> Vec<Stream> {
         .filter(|stream| seen_ids.insert(stream.id.clone()))
         .collect::<Vec<_>>();
 
-    // MovieBox frequently returns several CDN/source copies of the same
-    // encoding. The picker is resolution-oriented, so retain only the first
-    // valid resource for each resolution rather than showing a long list of
-    // indistinguishable 1080p or 720p entries.
     unique_resources.sort_by(|left, right| {
         resolution_value(&right.resolution).cmp(&resolution_value(&left.resolution))
     });
@@ -521,8 +841,28 @@ fn string_values(value: &Value) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::deduplicate_and_sort;
+    use super::{clean_title, deduplicate_and_sort, format_language_name};
     use crate::models::Stream;
+
+    #[test]
+    fn test_clean_title_removes_dubs_and_brackets() {
+        assert_eq!(clean_title("The Nun [Hindi]"), "The Nun");
+        assert_eq!(clean_title("The Nun (Hindi Dub)"), "The Nun");
+        assert_eq!(clean_title("Bleach (Hindi Dub) S01-02"), "Bleach");
+        assert_eq!(clean_title("Avatar [Tamil] [Telugu]"), "Avatar");
+        assert_eq!(clean_title("Money Heist S01-05"), "Money Heist");
+        assert_eq!(clean_title("Breaking Bad"), "Breaking Bad");
+    }
+
+    #[test]
+    fn test_format_language_name() {
+        assert_eq!(format_language_name("Original Audio", "en", true), "English (Original)");
+        assert_eq!(format_language_name("Original Audio", "ja", true), "Japanese (Original)");
+        assert_eq!(format_language_name("Original Audio", "", true), "Original Audio");
+        assert_eq!(format_language_name("Hindi dub", "hi", false), "Hindi");
+        assert_eq!(format_language_name("esla dub", "esla", false), "Spanish (Latin America)");
+        assert_eq!(format_language_name("ptbr dub", "ptbr", false), "Portuguese (Brazil)");
+    }
 
     #[test]
     fn stream_picker_keeps_one_stream_for_each_resolution() {
@@ -544,6 +884,97 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    #[ignore]
+    async fn test_the_nun_search_and_dubs() {
+        let mut client = super::MovieBoxClient::new();
+        let items = client.search("The Nun").await.unwrap();
+        println!("Search results count for 'The Nun': {}", items.len());
+        for it in &items {
+            println!("  Item: id={} title='{}' year='{}' kind='{}'", it.id, it.title, it.year, it.kind);
+        }
+
+        // Verify only 1 result for "The Nun" (2018)
+        let nun_2018 = items.iter().filter(|it| it.title == "The Nun" && it.year == "2018").collect::<Vec<_>>();
+        assert_eq!(nun_2018.len(), 1, "Expected exactly 1 result for The Nun (2018)");
+
+        let details = client.details(&nun_2018[0].id).await.unwrap();
+        println!("Details for '{}' ({}): dubs count={}", details.title, details.year, details.dubs.len());
+        for dub in &details.dubs {
+            println!("  Dub: id={} language='{}'", dub.id, dub.language);
+        }
+        assert!(details.dubs.len() >= 2, "Expected at least 2 dubs (Original, Hindi, etc.)");
+        assert!(details.dubs.iter().any(|d| d.language.contains("Original")));
+        assert!(details.dubs.iter().any(|d| d.language.contains("Hindi")));
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn test_the_mentalist_search() {
+        let mut client = super::MovieBoxClient::new();
+        let raw_res = client.request(
+            reqwest::Method::POST,
+            "/wefeed-mobile-bff/subject-api/search/v2",
+            Some(serde_json::json!({
+                "keyword": "The Mentalist",
+                "page": 1,
+                "perPage": 20,
+                "subjectType": "All",
+                "tabId": "All"
+            })),
+        ).await.unwrap();
+
+        println!("Raw results for 'The Mentalist':");
+        for group in raw_res["results"].as_array().into_iter().flatten() {
+            for s in group["subjects"].as_array().into_iter().flatten() {
+                println!(
+                    "  Raw Subject: id={} title='{}' relDate='{}' type={} corner='{}' season={}",
+                    s["subjectId"].as_str().unwrap_or(""),
+                    s["title"].as_str().unwrap_or(""),
+                    s["releaseDate"].as_str().unwrap_or(""),
+                    s["subjectType"].as_i64().unwrap_or(0),
+                    s["corner"].as_str().unwrap_or(""),
+                    s["season"].as_u64().unwrap_or(0)
+                );
+            }
+        }
+
+        let items = client.search("The Mentalist").await.unwrap();
+        println!("\nDeduped search items for 'The Mentalist':");
+        for it in &items {
+            println!("  Item: id={} title='{}' year='{}' kind='{}' seasons={}", it.id, it.title, it.year, it.kind, it.seasons);
+        }
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn test_series_episode_streams() {
+        let mut client = super::MovieBoxClient::new();
+        // The Mentalist id: 7845473610491125400
+        let id = "7845473610491125400";
+
+        let s1e1 = client.series_streams(id, 1, 1).await.unwrap();
+        println!("Streams found for S1 E1: count={}", s1e1.len());
+        for s in &s1e1 {
+            println!("  S1E1 Stream: label='{}' res={}", s.label, s.resolution);
+        }
+        assert!(s1e1.iter().any(|s| s.label.contains("Pilot")));
+
+        let s2e3 = client.series_streams(id, 2, 3).await.unwrap();
+        println!("Streams found for S2 E3: count={}", s2e3.len());
+        for s in &s2e3 {
+            println!("  S2E3 Stream: label='{}' res={}", s.label, s.resolution);
+        }
+        assert!(s2e3.iter().any(|s| s.label.contains("Red Badge")));
+
+        let s7e13 = client.series_streams(id, 7, 13).await.unwrap();
+        println!("Streams found for S7 E13: count={}", s7e13.len());
+        for s in &s7e13 {
+            println!("  S7E13 Stream: label='{}' res={}", s.label, s.resolution);
+        }
+        assert!(s7e13.iter().any(|s| s.label.contains("White Orchids")));
+    }
+
     fn stream(id: &str, resolution: &str) -> Stream {
         Stream {
             id: id.into(),
@@ -555,3 +986,7 @@ mod tests {
         }
     }
 }
+
+
+
+

@@ -21,6 +21,7 @@ pub struct MediaItem {
     pub year: String,
     pub poster: Option<String>,
     pub seasons: u32,
+    pub rating: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -29,6 +30,13 @@ pub struct Episode {
     pub season: u32,
     pub episode: u32,
     pub label: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Dub {
+    pub id: String,
+    pub language: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -43,6 +51,7 @@ pub struct Details {
     pub rating: String,
     pub genres: Vec<String>,
     pub episodes: Vec<Episode>,
+    pub dubs: Vec<Dub>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
