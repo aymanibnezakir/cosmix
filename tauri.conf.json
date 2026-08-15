@@ -1,11 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "CosmiX",
-  "version": "1.0.0",
+  "version": "1.5.0",
   "identifier": "com.cosmix.desktop",
   "build": { "frontendDist": "ui" },
   "app": {
-    "windows": [{ "title": "CosmiX v1.0.0", "width": 1280, "height": 820, "minWidth": 940, "minHeight": 620, "resizable": true }],
+    "windows": [{ "title": "CosmiX v1.5.0", "width": 1280, "height": 820, "minWidth": 940, "minHeight": 620, "resizable": true }],
     "security": { "csp": null }
   },
   "bundle": {
