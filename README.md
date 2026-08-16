@@ -6,10 +6,10 @@
 
 **A lightweight, blazing-fast desktop media streaming and download client powered by Rust & Tauri.**
 
-[![Release](https://img.shields.io/github/v/release/AymanZakir/CosmiX?style=for-the-badge&color=f4c34f&labelColor=191a1e)](https://github.com/AymanZakir/CosmiX/releases)
+[![Release](https://img.shields.io/github/v/release/aymanibnezakir/cosmix?style=for-the-badge&color=f4c34f&labelColor=191a1e)](https://github.com/aymanibnezakir/cosmix/releases)
 [![Rust](https://img.shields.io/badge/Rust-2024_Edition-orange?style=for-the-badge&logo=rust&logoColor=white&labelColor=191a1e)](https://www.rust-lang.org/)
 [![Tauri](https://img.shields.io/badge/Tauri-v2-24C8D8?style=for-the-badge&logo=tauri&logoColor=white&labelColor=191a1e)](https://tauri.app/)
-[![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white&labelColor=191a1e)](https://github.com/AymanZakir/CosmiX)
+[![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white&labelColor=191a1e)](https://github.com/aymanibnezakir/cosmix)
 
 </div>
 
