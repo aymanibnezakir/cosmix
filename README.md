@@ -64,7 +64,7 @@ CosmiX is continuously expanding its provider ecosystem. Future releases will in
 
 ### Prerequisites
 
-1. **VLC Media Player** must be installed on your system and added to your `PATH` (or located at standard install directories).
+1. **VLC Media Player** must be installed on your system (located at standard install directories).
 2. **Windows 10 / 11** (64-bit).
 
 ---
