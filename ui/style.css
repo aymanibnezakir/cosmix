@@ -316,14 +316,15 @@ main {
 }
 
 .results > .empty-state,
-.results > .hint {
+.results > .hint,
+.detail > .hint {
     grid-column: 1 / -1;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     text-align: center;
-    min-height: 55vh;
+    min-height: calc(100vh - 160px);
     margin: 0 auto;
     width: 100%;
 }
@@ -409,8 +410,8 @@ main {
 }
 
 .card:hover h3 {
-    color: #fff;
-    text-shadow: 0 0 10px rgba(244, 195, 79, 0.6), 0 0 22px rgba(244, 195, 79, 0.35);
+    color: var(--accent);
+    text-shadow: none;
 }
 
 .meta {
@@ -424,7 +425,9 @@ main {
 }
 
 .detail {
-    max-width: 1020px
+    max-width: 1020px;
+    margin: 0 auto;
+    width: 100%;
 }
 
 .hero {
@@ -935,40 +938,53 @@ main {
     border-radius: 6px;
     cursor: pointer;
     box-shadow: none;
-    transition: background .15s, opacity .15s, box-shadow .15s
+    transition: background .15s, opacity .15s;
+}
+
+.dl-btn:hover {
+    box-shadow: none;
+    filter: none;
+}
+
+.dl-btn:active {
+    box-shadow: none;
+    transform: none;
+    filter: none;
 }
 
 .dl-pause {
     background: #2e2a1e;
-    color: #e0c05e
+    color: #e0c05e;
 }
 
 .dl-pause:hover {
     background: #3a341e;
-    box-shadow: 0 0 10px rgba(224, 192, 94, 0.25);
+    box-shadow: none;
 }
 
 .dl-resume {
     background: #1e2e35;
-    color: #5ec4e8
+    color: #5ec4e8;
 }
 
 .dl-resume:hover {
     background: #253a42;
+    box-shadow: none;
 }
 
 .dl-cancel {
     background: #2e1e1e;
-    color: #e86060
+    color: #e86060;
 }
 
 .dl-cancel:hover {
     background: #3a2222;
+    box-shadow: none;
 }
 
 .dl-retry {
     background: #1e2e35;
-    color: #5ec4e8
+    color: #5ec4e8;
 }
 
 .dl-retry:hover {
@@ -978,7 +994,7 @@ main {
 
 .dl-open {
     background: #1e2e1e;
-    color: #5ed88a
+    color: #5ed88a;
 }
 
 .dl-open:hover {
@@ -988,11 +1004,12 @@ main {
 
 .dl-remove {
     background: #252527;
-    color: #888
+    color: #888;
 }
 
 .dl-remove:hover {
-    background: #303033
+    background: #303033;
+    box-shadow: none;
 }
 
 /* Header right */

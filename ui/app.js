@@ -22,33 +22,105 @@ pushNav("welcome", null);
 /* typewriter placeholder */
 {
     const suggestions = [
-        'Try "Breaking Bad"',
-        'Try "Insidious: The Red Door"',
-        'Try "Death Note"',
-        'Try "From"',
-        'Try "Interstellar"',
-        'Try "Dhurandhar"',
-        'Try "The Last of Us"',
-        'Try "12th Fail"',
-        'Try "Oppenheimer"',
-        'Try "Game of Thrones"',
-        'Try "Peaky Blinders"',
-        'Try "Friends"',
-        'Try "The Office"',
-        'Try "Sherlock"',
-        'Try "Stranger Things"',
-        'Try "Naruto"',
+        'Try "The Dark Knight"',
         'Try "Attack on Titan"',
-        'Try "One Piece"',
+        'Try "Breaking Bad"',
         'Try "Demon Slayer"',
-        'Try "My Hero Academia"',
+        'Try "Interstellar"',
+        'Try "Peaky Blinders"',
+        'Try "Your Name"',
+        'Try "Death Note"',
+        'Try "Stranger Things"',
+        'Try "The Shawshank Redemption"',
+        'Try "One Piece"',
+        'Try "Oppenheimer"',
+        'Try "Jujutsu Kaisen"',
+        'Try "Game of Thrones"',
+        'Try "12th Fail"',
+        'Try "Naruto"',
+        'Try "Inception"',
+        'Try "The Last of Us"',
+        'Try "Friends"',
+        'Try "Vinland Saga"',
+        'Try "Avengers: Endgame"',
+        'Try "Sherlock"',
+        'Try "Interstellar"',
         'Try "Black Clover"',
-        'Try "Tokyo Ghoul"',
-        'Try "Fullmetal Alchemist"',
-        'Try "Sword Art Online"',
+        'Try "The Office"',
+        'Try "A Silent Voice"',
+        'Try "From"',
+        'Try "Fullmetal Alchemist: Brotherhood"',
+        'Try "The Prestige"',
+        'Try "Insidious: The Red Door"',
         'Try "Hunter x Hunter"',
+        'Try "The Matrix"',
         'Try "One Punch Man"',
-
+        'Try "The Boys"',
+        'Try "Dhurandhar"',
+        'Try "Tokyo Ghoul"',
+        'Try "Spider-Man: No Way Home"',
+        'Try "Solo Leveling"',
+        'Try "The Walking Dead"',
+        'Try "Howl\'s Moving Castle"',
+        'Try "Dark"',
+        'Try "Sword Art Online"',
+        'Try "Gladiator"',
+        'Try "My Hero Academia"',
+        'Try "Naruto: Shippuden"',
+        'Try "The Conjuring"',
+        'Try "Steins;Gate"',
+        'Try "Peaky Blinders"',
+        'Try "The Wolf of Wall Street"',
+        'Try "Chainsaw Man"',
+        'Try "Avengers: Infinity War"',
+        'Try "Mob Psycho 100"',
+        'Try "The Godfather"',
+        'Try "Wednesday"',
+        'Try "Suzume"',
+        'Try "Black Mirror"',
+        'Try "Code Geass"',
+        'Try "The Dark Knight Rises"',
+        'Try "Attack on Titan: The Final Season"',
+        'Try "Prison Break"',
+        'Try "Weathering with You"',
+        'Try "Chernobyl"',
+        'Try "Dragon Ball Z"',
+        'Try "The Lord of the Rings: The Return of the King"',
+        'Try "Erased"',
+        'Try "Money Heist"',
+        'Try "Cyberpunk: Edgerunners"',
+        'Try "The Mandalorian"',
+        'Try "Death Note"',
+        'Try "Arcane"',
+        'Try "12th Fail"',
+        'Try "Demon Slayer: Mugen Train"',
+        'Try "Mr. Robot"',
+        'Try "Your Lie in April"',
+        'Try "The Haunting of Hill House"',
+        'Try "Vinland Saga"',
+        'Try "John Wick"',
+        'Try "Pluto"',
+        'Try "The Last Kingdom"',
+        'Try "Narcos"',
+        'Try "Frieren: Beyond Journey\'s End"',
+        'Try "The Batman"',
+        'Try "Monster"',
+        'Try "Better Call Saul"',
+        'Try "I Want to Eat Your Pancreas"',
+        'Try "The Boys"',
+        'Try "Alice in Borderland"',
+        'Try "Jujutsu Kaisen 0"',
+        'Try "The Social Network"',
+        'Try "Re:Zero"',
+        'Try "Squid Game"',
+        'Try "Fate/Zero"',
+        'Try "The Pianist"',
+        'Try "Haikyuu!!"',
+        'Try "Shutter Island"',
+        'Try "Bleach"',
+        'Try "The Green Mile"',
+        'Try "Made in Abyss"',
+        'Try "Interstellar"',
     ];
     const tw = $("#typewriter"), input = $("#query"), wrap = $(".search-wrap");
     let idx = 0, running = true;
@@ -161,7 +233,7 @@ function promptLanguageOrStream(season = null, episode = null) {
     const d = state.details;
     if (state.provider === "moviebox" && d.dubs && d.dubs.length > 1) {
         const episodeText = (season != null && episode != null) ? ` for S${String(season).padStart(2, '0')} · E${String(episode).padStart(2, '0')}` : "";
-        $("#languageSubtitle").textContent = `Choose Audio${episodeText}`;
+        $("#languageSubtitle").textContent = `Choose Preffered Audio${episodeText}`;
         $("#languageList").innerHTML = d.dubs.map(dub => {
             const isOrig = dub.language.includes("(Original)") || dub.language.startsWith("Original");
             const origClass = isOrig ? " is-original" : "";
@@ -183,10 +255,10 @@ function promptLanguageOrStream(season = null, episode = null) {
 }
 
 /* search */
-async function search() { $("#query").blur(); const query = $("#query").value.trim(); if (!query) return; $("#welcome").classList.add("hidden"); $("#detail").classList.add("hidden"); const box = $("#results"); box.classList.remove("hidden"); box.innerHTML = "<p class='hint'>Searching…</p>"; try { const items = await invoke("search", { provider: state.provider, query }); const html = resultsHtml(items); box.innerHTML = html; bindResultCards(items); pushNav("results", { html, items }) } catch (e) { box.innerHTML = ""; toast(String(e)) } }
+async function search() { $("#query").blur(); const query = $("#query").value.trim(); if (!query) return; $("#welcome").classList.add("hidden"); $("#detail").classList.add("hidden"); const box = $("#results"); box.classList.remove("hidden"); box.innerHTML = "<p class='hint'>Hold on...</p>"; try { const items = await invoke("search", { provider: state.provider, query }); const html = resultsHtml(items); box.innerHTML = html; bindResultCards(items); pushNav("results", { html, items }) } catch (e) { box.innerHTML = ""; toast(String(e)) } }
 
 /* details */
-async function details(item) { $("#results").classList.add("hidden"); const box = $("#detail"); box.classList.remove("hidden"); box.innerHTML = "<p class='hint'>Loading details…</p>"; try { const d = await invoke("get_details", { provider: state.provider, id: item.id }); const html = detailHtml(d); box.innerHTML = html; bindDetailActions(d); pushNav("detail", { html, detail: d }) } catch (e) { toast(String(e)); $("#welcome").classList.remove("hidden"); box.classList.add("hidden") } }
+async function details(item) { $("#results").classList.add("hidden"); const box = $("#detail"); box.classList.remove("hidden"); box.innerHTML = "<p class='hint'>Fetching Streams, Please wait...</p>"; try { const d = await invoke("get_details", { provider: state.provider, id: item.id }); const html = detailHtml(d); box.innerHTML = html; bindDetailActions(d); pushNav("detail", { html, detail: d }) } catch (e) { toast(String(e)); $("#welcome").classList.remove("hidden"); box.classList.add("hidden") } }
 
 /* streams (with Play + Download buttons) */
 async function streams(season = null, episode = null, targetId = null) {
@@ -194,7 +266,7 @@ async function streams(season = null, episode = null, targetId = null) {
     const activeId = targetId || d.id;
     const episodeLabel = (season != null && episode != null) ? `S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}` : null;
     $("#streamModal").classList.remove("hidden");
-    $("#streamList").innerHTML = "<p class='hint'>Finding available streams…</p>";
+    $("#streamList").innerHTML = "<p class='hint'>Finding available streams, be patient...</p>";
     try {
         const list = await invoke("get_streams", { provider: state.provider, id: activeId, season, episode });
         if (!list.length) {
@@ -271,12 +343,55 @@ async function refreshDownloads() {
             container.innerHTML = "<p class='hint'>No downloads yet.</p>";
             return;
         }
-        container.innerHTML = downloads.map(dl => renderDownloadEntry(dl)).join("");
-        bindDownloadActions();
+
+        const hint = container.querySelector(":scope > .hint");
+        if (hint) hint.remove();
+
+        const currentIds = new Set(downloads.map(dl => dl.id));
+
+        // Remove deleted downloads from DOM
+        container.querySelectorAll(".download-entry").forEach(el => {
+            if (!currentIds.has(el.dataset.id)) {
+                el.remove();
+            }
+        });
+
+        // Insert or update entries in-place to prevent hover flicker
+        for (const dl of downloads) {
+            const s = dl.status;
+            let el = container.querySelector(`.download-entry[data-id="${dl.id}"]`);
+            if (!el) {
+                el = document.createElement("div");
+                el.className = "download-entry";
+                el.dataset.id = dl.id;
+                el.dataset.statusKind = s.kind;
+                el.innerHTML = renderDownloadContent(dl);
+                container.appendChild(el);
+            } else {
+                if (el.dataset.statusKind !== s.kind) {
+                    el.dataset.statusKind = s.kind;
+                    el.innerHTML = renderDownloadContent(dl);
+                } else if (s.kind === "downloading") {
+                    const pct = s.total ? Math.round((s.downloaded / s.total) * 100) : null;
+                    const pctText = pct != null ? `${pct}%` : "";
+                    const sizeText = `${formatSize(s.downloaded)}${s.total ? " / " + formatSize(s.total) : ""}`;
+                    const barWidth = pct != null ? `${pct}%` : "100%";
+
+                    const statusEl = el.querySelector(".dl-status");
+                    if (statusEl) statusEl.textContent = `Downloading ${pctText}`;
+
+                    const progressFill = el.querySelector(".dl-progress-fill");
+                    if (progressFill) progressFill.style.width = barWidth;
+
+                    const speedEl = el.querySelector(".dl-speed");
+                    if (speedEl) speedEl.textContent = `${formatSpeed(s.speedBps ?? s.speed_bps)} · ${sizeText}`;
+                }
+            }
+        }
     } catch (e) { /* silently ignore poll errors */ }
 }
 
-function renderDownloadEntry(dl) {
+function renderDownloadContent(dl) {
     const s = dl.status;
     let statusHtml = "";
     let actionsHtml = "";
@@ -305,7 +420,7 @@ function renderDownloadEntry(dl) {
         case "paused": {
             const sizeText = `${formatSize(s.downloaded)}${s.total ? " / " + formatSize(s.total) : ""}`;
             const pct = s.total ? Math.round((s.downloaded / s.total) * 100) : 0;
-            statusHtml = `<span class="dl-status status-paused">⏸ Paused</span>`;
+            statusHtml = `<span class="dl-status status-paused">Paused</span>`;
             progressHtml = `<div class="dl-progress"><div class="dl-progress-fill paused" style="width:${s.total ? pct + '%' : '0%'}"></div></div>`;
             actionsHtml = `
                 <span class="dl-speed">${sizeText}</span>
@@ -336,25 +451,41 @@ function renderDownloadEntry(dl) {
 
     const epLabel = dl.episodeLabel ? ` · ${esc(dl.episodeLabel)}` : "";
     return `
-        <div class="download-entry">
-            <div class="dl-header">
-                <div class="dl-title">${esc(dl.title)}${epLabel} <span class="dl-res">[${esc(dl.resolution)}]</span></div>
-                ${statusHtml}
-            </div>
-            ${progressHtml}
-            <div class="dl-actions">${actionsHtml}</div>
+        <div class="dl-header">
+            <div class="dl-title">${esc(dl.title)}${epLabel} <span class="dl-res">[${esc(dl.resolution)}]</span></div>
+            ${statusHtml}
         </div>
+        ${progressHtml}
+        <div class="dl-actions">${actionsHtml}</div>
     `;
 }
 
-function bindDownloadActions() {
-    document.querySelectorAll(".dl-pause").forEach(b => b.onclick = async () => { try { await invoke("pause_download", { id: b.dataset.id }); refreshDownloads(); } catch (e) { toast(String(e)); } });
-    document.querySelectorAll(".dl-resume").forEach(b => b.onclick = async () => { try { await invoke("resume_download", { id: b.dataset.id }); refreshDownloads(); } catch (e) { toast(String(e)); } });
-    document.querySelectorAll(".dl-cancel").forEach(b => b.onclick = async () => { try { await invoke("cancel_download", { id: b.dataset.id }); refreshDownloads(); } catch (e) { toast(String(e)); } });
-    document.querySelectorAll(".dl-remove").forEach(b => b.onclick = async () => { try { await invoke("remove_download", { id: b.dataset.id }); refreshDownloads(); } catch (e) { toast(String(e)); } });
-    document.querySelectorAll(".dl-retry").forEach(b => b.onclick = async () => { try { await invoke("retry_download", { id: b.dataset.id }); refreshDownloads(); } catch (e) { toast(String(e)); } });
-    document.querySelectorAll(".dl-open").forEach(b => b.onclick = async () => { try { await invoke("open_download_location", { path: b.dataset.path }); } catch (e) { toast(String(e)); } });
-}
+$("#downloadList").onclick = async e => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    try {
+        if (b.classList.contains("dl-pause")) {
+            await invoke("pause_download", { id: b.dataset.id });
+            refreshDownloads();
+        } else if (b.classList.contains("dl-resume")) {
+            await invoke("resume_download", { id: b.dataset.id });
+            refreshDownloads();
+        } else if (b.classList.contains("dl-cancel")) {
+            await invoke("cancel_download", { id: b.dataset.id });
+            refreshDownloads();
+        } else if (b.classList.contains("dl-remove")) {
+            await invoke("remove_download", { id: b.dataset.id });
+            refreshDownloads();
+        } else if (b.classList.contains("dl-retry")) {
+            await invoke("retry_download", { id: b.dataset.id });
+            refreshDownloads();
+        } else if (b.classList.contains("dl-open")) {
+            await invoke("open_download_location", { path: b.dataset.path });
+        }
+    } catch (err) {
+        toast(String(err));
+    }
+};
 
 /* event bindings */
 document.addEventListener("contextmenu", e => e.preventDefault());
