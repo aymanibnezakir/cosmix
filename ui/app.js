@@ -264,6 +264,7 @@ async function details(item) { $("#results").classList.add("hidden"); const box 
 async function streams(season = null, episode = null, targetId = null) {
     const d = state.details;
     const activeId = targetId || d.id;
+    const episodeLabel = (season != null && episode != null) ? `S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}` : null;
     const episodeText = (season != null && episode != null) ? ` for S${String(season).padStart(2, '0')} · E${String(episode).padStart(2, '0')}` : "";
     const modalTitle = (season != null && episode != null) ? `Select a stream${episodeText}` : "Select a stream";
     const titleEl = $("#streamModal h2");

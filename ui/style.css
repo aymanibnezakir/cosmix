@@ -665,7 +665,7 @@ main {
     font-weight: 600;
     text-align: left;
     box-shadow: none;
-    transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
 }
 
 .language-btn.is-original {
@@ -676,16 +676,20 @@ main {
     background: #23242c;
     border-color: var(--accent);
     transform: translateY(-2px);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), 0 0 14px var(--accent-glow-subtle);
+    box-shadow: none;
+    filter: none;
 }
 
 .language-btn.is-original:hover {
     border-color: #7fda83;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), 0 0 14px var(--success-glow);
+    box-shadow: none;
+    filter: none;
 }
 
 .language-btn:active {
     transform: translateY(0) scale(0.98);
+    box-shadow: none;
+    filter: none;
 }
 
 .dubs-badge-container {
