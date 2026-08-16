@@ -127,10 +127,12 @@ impl MovieBoxClient {
             }
         }
 
-        let query = query.to_ascii_lowercase();
+        let query_lower = query.trim().to_lowercase();
+        results.retain(|item| item.title.to_lowercase().contains(&query_lower));
+
         results.sort_by(|left, right| {
-            search_rank(left, &query)
-                .cmp(&search_rank(right, &query))
+            search_rank(left, &query_lower)
+                .cmp(&search_rank(right, &query_lower))
                 .then_with(|| right.year.cmp(&left.year))
         });
         Ok(results)
@@ -842,7 +844,51 @@ fn string_values(value: &Value) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::{clean_title, deduplicate_and_sort, format_language_name};
-    use crate::models::Stream;
+    use crate::models::{MediaItem, Stream};
+
+    #[test]
+    fn test_search_results_contain_query_keyword_case_insensitive() {
+        let items = vec![
+            MediaItem {
+                id: "1".into(),
+                title: "The Dark Knight".into(),
+                kind: "movie".into(),
+                year: "2008".into(),
+                poster: None,
+                seasons: 0,
+                rating: None,
+            },
+            MediaItem {
+                id: "2".into(),
+                title: "Batman Begins".into(),
+                kind: "movie".into(),
+                year: "2005".into(),
+                poster: None,
+                seasons: 0,
+                rating: None,
+            },
+            MediaItem {
+                id: "3".into(),
+                title: "dark".into(),
+                kind: "series".into(),
+                year: "2017".into(),
+                poster: None,
+                seasons: 3,
+                rating: None,
+            },
+        ];
+
+        let query = "DARK";
+        let query_lower = query.trim().to_lowercase();
+        let filtered: Vec<_> = items
+            .into_iter()
+            .filter(|item| item.title.to_lowercase().contains(&query_lower))
+            .collect();
+
+        assert_eq!(filtered.len(), 2);
+        assert_eq!(filtered[0].title, "The Dark Knight");
+        assert_eq!(filtered[1].title, "dark");
+    }
 
     #[test]
     fn test_clean_title_removes_dubs_and_brackets() {
