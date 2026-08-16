@@ -54,10 +54,13 @@ pushNav("welcome", null);
     let idx = 0, running = true;
     const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+    const searchBtn = $("#searchBtn");
     input.addEventListener("focus", () => wrap.classList.add("has-focus"));
     input.addEventListener("blur", () => wrap.classList.remove("has-focus"));
     input.addEventListener("input", () => {
+        const hasText = input.value.trim().length > 0;
         wrap.classList.toggle("has-value", input.value.length > 0);
+        if (searchBtn) searchBtn.disabled = !hasText;
     });
 
     (async () => {
@@ -117,7 +120,13 @@ function resultsHtml(items) {
                 </button>
             `;
         }).join("")
-        : "<p class='hint'>No results found.</p>";
+        : `
+            <div class="empty-state">
+                <p class="empty-title">Hmm... looks like we came up empty.</p>
+                <p class="empty-sub">Try matching the original title exactly.</p>
+                <p class="empty-sub">Or, try another provider.</p>
+            </div>
+        `;
 }
 function bindResultCards(items) { $("#results").querySelectorAll(".card").forEach(b => b.onclick = () => details(items[+b.dataset.index])) }
 

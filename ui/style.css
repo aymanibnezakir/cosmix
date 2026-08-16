@@ -18,13 +18,14 @@
     box-sizing: border-box
 }
 
-html, body {
+html,
+body {
     min-height: 100vh
 }
 
 body {
     margin: 0;
-    background: 
+    background:
         radial-gradient(120vw 75vh at 50% 0%, #2e2413 0%, #1c1811 35%, transparent 70%),
         radial-gradient(110vw 70vh at 50% 100%, #271f11 0%, #181510 40%, transparent 75%),
         var(--bg);
@@ -212,19 +213,37 @@ button:active {
 form button {
     border-radius: 0;
     box-shadow: none;
-    transition: background .15s ease, transform .12s ease, box-shadow .15s ease, filter .15s ease
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 26px;
+
+    transition: background .15s ease, transform .12s ease, box-shadow .15s ease, filter .15s ease, opacity .15s ease;
 }
 
-form button:hover {
+form button svg {
+    display: block;
+    width: 22px;
+    height: 22px;
+}
+
+form button:hover:not(:disabled) {
     background: #ffd066;
     filter: brightness(1.05);
     box-shadow: 0 0 16px var(--accent-glow);
 }
 
-form button:active {
+form button:active:not(:disabled) {
     background: var(--accent2);
     transform: scale(0.96);
-    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.25)
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.25);
+}
+
+form button:disabled {
+    opacity: 0.35;
+    cursor: default;
+    filter: grayscale(0.5);
+    box-shadow: none;
 }
 
 
@@ -268,6 +287,7 @@ main {
         box-shadow: 0 0 24px rgba(244, 195, 79, 0.45), 0 0 48px rgba(244, 195, 79, 0.2), inset 0 0 10px rgba(255, 255, 255, 0.35);
         transform: scale(1);
     }
+
     100% {
         box-shadow: 0 0 38px rgba(244, 195, 79, 0.7), 0 0 75px rgba(244, 195, 79, 0.35), inset 0 0 16px rgba(255, 255, 255, 0.5);
         transform: scale(1.04);
@@ -292,7 +312,35 @@ main {
 .results {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 22px
+    gap: 22px;
+}
+
+.results > .empty-state,
+.results > .hint {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    min-height: 55vh;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.empty-state .empty-title {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 10px;
+    letter-spacing: -0.3px;
+}
+
+.empty-state .empty-sub {
+    font-size: 15px;
+    color: var(--muted);
+    margin: 0;
+    line-height: 1.5;
 }
 
 .card,
@@ -796,13 +844,11 @@ main {
 .status-downloading {
     background: #1e2e35;
     color: #5ec4e8;
-    box-shadow: 0 0 10px rgba(94, 196, 232, 0.3);
 }
 
 .status-paused {
     background: #2e2a1e;
     color: #e0c05e;
-    box-shadow: 0 0 10px rgba(224, 192, 94, 0.3);
 }
 
 .status-completed {
@@ -848,19 +894,22 @@ main {
 
 .dl-progress-fill.indeterminate {
     width: 100% !important;
-    background: repeating-linear-gradient(
-        90deg,
-        #3ea8d0 0%,
-        #5edfa8 25%,
-        #3ea8d0 50%
-    );
+    background: repeating-linear-gradient(90deg,
+            #3ea8d0 0%,
+            #5edfa8 25%,
+            #3ea8d0 50%);
     background-size: 200% 100%;
     animation: dl-shimmer 1.5s linear infinite
 }
 
 @keyframes dl-shimmer {
-    0% { background-position: 200% 0 }
-    100% { background-position: -200% 0 }
+    0% {
+        background-position: 200% 0
+    }
+
+    100% {
+        background-position: -200% 0
+    }
 }
 
 /* ── Download actions ── */
@@ -894,7 +943,7 @@ main {
     color: #e0c05e
 }
 
-.dl-pause:hover { 
+.dl-pause:hover {
     background: #3a341e;
     box-shadow: 0 0 10px rgba(224, 192, 94, 0.25);
 }
@@ -904,9 +953,8 @@ main {
     color: #5ec4e8
 }
 
-.dl-resume:hover { 
+.dl-resume:hover {
     background: #253a42;
-    box-shadow: 0 0 10px rgba(94, 196, 232, 0.25);
 }
 
 .dl-cancel {
@@ -914,9 +962,8 @@ main {
     color: #e86060
 }
 
-.dl-cancel:hover { 
+.dl-cancel:hover {
     background: #3a2222;
-    box-shadow: 0 0 10px rgba(232, 96, 96, 0.25);
 }
 
 .dl-retry {
@@ -924,7 +971,7 @@ main {
     color: #5ec4e8
 }
 
-.dl-retry:hover { 
+.dl-retry:hover {
     background: #253a42;
     box-shadow: 0 0 10px rgba(94, 196, 232, 0.25);
 }
@@ -934,7 +981,7 @@ main {
     color: #5ed88a
 }
 
-.dl-open:hover { 
+.dl-open:hover {
     background: #253a25;
     box-shadow: 0 0 10px rgba(94, 216, 138, 0.25);
 }
@@ -944,7 +991,9 @@ main {
     color: #888
 }
 
-.dl-remove:hover { background: #303033 }
+.dl-remove:hover {
+    background: #303033
+}
 
 /* ── Header right ── */
 
