@@ -9,7 +9,7 @@ function updateWelcomeSubtitle() {
 $("#provider").value = state.provider;
 updateWelcomeSubtitle();
 
-/* ── navigation history ── */
+/* navigation history */
 const history = [], historyData = [];
 let historyIndex = -1, navigating = false;
 function pushNav(view, data) { if (!navigating) { history.splice(historyIndex + 1); historyData.splice(historyIndex + 1); history.push(view); historyData.push(data); historyIndex = history.length - 1 } updateNavButtons() }
@@ -19,7 +19,7 @@ $("#navBack").onclick = () => { if (historyIndex <= 0) return; historyIndex--; n
 $("#navForward").onclick = () => { if (historyIndex >= history.length - 1) return; historyIndex++; navigating = true; showView(history[historyIndex], historyData[historyIndex]); navigating = false; updateNavButtons() };
 pushNav("welcome", null);
 
-/* ── typewriter placeholder ── */
+/* typewriter placeholder */
 {
     const suggestions = [
         'Try "Breaking Bad"',
@@ -83,7 +83,7 @@ pushNav("welcome", null);
     })();
 }
 
-/* ── utilities ── */
+/* utilities */
 function toast(message) { const e = $("#toast"); e.textContent = message; e.classList.remove("hidden"); setTimeout(() => e.classList.add("hidden"), 4200) }
 function esc(v) { return String(v ?? "").replace(/[&<>'"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[c])) }
 function poster(item) { return item.poster ? `style="background-image:linear-gradient(0deg,#0008,transparent 40%),url('${item.poster}')"` : ""; }
@@ -130,7 +130,7 @@ function resultsHtml(items) {
 }
 function bindResultCards(items) { $("#results").querySelectorAll(".card").forEach(b => b.onclick = () => details(items[+b.dataset.index])) }
 
-/* ── detail view ── */
+/* detail view */
 function detailHtml(d) {
     let episodesBlock = "";
     if (d.episodes && d.episodes.length) {
@@ -182,13 +182,13 @@ function promptLanguageOrStream(season = null, episode = null) {
     }
 }
 
-/* ── search ── */
+/* search */
 async function search() { $("#query").blur(); const query = $("#query").value.trim(); if (!query) return; $("#welcome").classList.add("hidden"); $("#detail").classList.add("hidden"); const box = $("#results"); box.classList.remove("hidden"); box.innerHTML = "<p class='hint'>Searching…</p>"; try { const items = await invoke("search", { provider: state.provider, query }); const html = resultsHtml(items); box.innerHTML = html; bindResultCards(items); pushNav("results", { html, items }) } catch (e) { box.innerHTML = ""; toast(String(e)) } }
 
-/* ── details ── */
+/* details */
 async function details(item) { $("#results").classList.add("hidden"); const box = $("#detail"); box.classList.remove("hidden"); box.innerHTML = "<p class='hint'>Loading details…</p>"; try { const d = await invoke("get_details", { provider: state.provider, id: item.id }); const html = detailHtml(d); box.innerHTML = html; bindDetailActions(d); pushNav("detail", { html, detail: d }) } catch (e) { toast(String(e)); $("#welcome").classList.remove("hidden"); box.classList.add("hidden") } }
 
-/* ── streams (with Play + Download buttons) ── */
+/* streams (with Play + Download buttons) */
 async function streams(season = null, episode = null, targetId = null) {
     const d = state.details;
     const activeId = targetId || d.id;
@@ -247,7 +247,7 @@ async function streams(season = null, episode = null, targetId = null) {
     }
 }
 
-/* ── downloads panel ── */
+/* downloads panel */
 let downloadPollInterval = null;
 
 function openDownloadsPanel() {
@@ -356,7 +356,7 @@ function bindDownloadActions() {
     document.querySelectorAll(".dl-open").forEach(b => b.onclick = async () => { try { await invoke("open_download_location", { path: b.dataset.path }); } catch (e) { toast(String(e)); } });
 }
 
-/* ── event bindings ── */
+/* event bindings */
 document.addEventListener("contextmenu", e => e.preventDefault());
 $("#searchForm").onsubmit = e => { e.preventDefault(); search() };
 $("#settings").onclick = () => $("#modal").classList.remove("hidden");

@@ -66,7 +66,7 @@ pub fn play_in_vlc(url: String, headers: Option<Vec<StreamHeader>>) -> Result<()
     launch_vlc(&url, &headers.unwrap_or_default())
 }
 
-// ── Download commands ───────────────────────────────────────────────────────
+// Download commands
 
 #[tauri::command]
 pub async fn start_download(

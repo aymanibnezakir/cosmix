@@ -18,7 +18,7 @@ use crate::{
     models::{DownloadInfo, DownloadStatusInfo, StreamHeader},
 };
 
-// ── Status ──────────────────────────────────────────────────────────────────
+// Download state tracking
 
 #[derive(Clone, Debug)]
 pub enum DownloadStatus {
@@ -41,7 +41,7 @@ pub enum DownloadStatus {
     Cancelled,
 }
 
-// ── Entry ───────────────────────────────────────────────────────────────────
+// Download item model
 
 #[derive(Clone, Debug)]
 pub struct DownloadEntry {
@@ -90,7 +90,7 @@ impl DownloadEntry {
     }
 }
 
-// ── Manager ─────────────────────────────────────────────────────────────────
+// Download manager and lifecycle
 
 struct TaskHandle {
     cancel: Arc<Notify>,
@@ -127,7 +127,7 @@ impl DownloadManager {
         url: String,
         headers: Vec<StreamHeader>,
     ) -> Result<String> {
-        // Duplicate check
+        // Prevent duplicate downloads for active streams
         {
             let entries = self.entries.lock().await;
             for entry in entries.iter() {
@@ -202,7 +202,7 @@ impl DownloadManager {
     }
 
     pub async fn cancel_download(&self, id: &str) -> Result<()> {
-        // Signal cancellation
+        // Tell the background task to stop
         {
             let tasks = self.tasks.lock().await;
             if let Some(handle) = tasks.get(id) {
@@ -214,7 +214,7 @@ impl DownloadManager {
         if let Some(entry) = entries.iter_mut().find(|e| e.id == id) {
             let partial_path = entry.file_path.clone();
             entry.status = DownloadStatus::Cancelled;
-            // Clean up partial file
+            // Clean up the incomplete file on disk
             let _ = fs::remove_file(&partial_path).await;
         }
 
@@ -223,7 +223,7 @@ impl DownloadManager {
     }
 
     pub async fn remove_download(&self, id: &str) -> Result<()> {
-        // Cancel if still running
+        // Cancel the task if it's currently running
         {
             let tasks = self.tasks.lock().await;
             if let Some(handle) = tasks.get(id) {
@@ -235,7 +235,7 @@ impl DownloadManager {
         let mut entries = self.entries.lock().await;
         if let Some(index) = entries.iter().position(|e| e.id == id) {
             let entry = entries.remove(index);
-            // Delete partial file for non-completed downloads
+            // Delete leftover file if the download didn't finish
             if !matches!(entry.status, DownloadStatus::Completed { .. }) {
                 let _ = fs::remove_file(&entry.file_path).await;
             }
@@ -263,7 +263,7 @@ impl DownloadManager {
             }
         };
 
-        // Delete any partial file from previous attempt
+        // Wipe any incomplete file before starting fresh
         let _ = fs::remove_file(&file_path).await;
 
         self.spawn_download_task(id.to_owned(), url, headers, file_path, 0)
@@ -280,7 +280,7 @@ impl DownloadManager {
             .collect()
     }
 
-    // ── internals ───────────────────────────────────────────────────────────
+    // Helper functions
 
     async fn spawn_download_task(
         &self,
@@ -322,7 +322,7 @@ impl DownloadManager {
             if let Err(error) = result {
                 let mut entries = entries.lock().await;
                 if let Some(entry) = entries.iter_mut().find(|e| e.id == id) {
-                    // Don't overwrite cancelled/paused status
+                    // Keep user-initiated status (cancelled/paused) intact
                     if matches!(
                         entry.status,
                         DownloadStatus::Downloading { .. } | DownloadStatus::Queued
@@ -365,7 +365,7 @@ impl DownloadManager {
         let mut candidate = download_dir.join(format!("{base_name}.{extension}"));
         let mut counter = 1u32;
 
-        // Check existing entries too, not just filesystem
+        // Ensure we don't collide with existing files on disk or queued downloads in memory
         let entries = self.entries.lock().await;
         loop {
             let path_exists = candidate.exists();
@@ -384,7 +384,7 @@ impl DownloadManager {
     }
 }
 
-// ── Download task ───────────────────────────────────────────────────────────
+// Background download execution
 
 async fn run_download(
     http: &Client,
@@ -397,7 +397,7 @@ async fn run_download(
     cancel: Arc<Notify>,
     pause: Arc<Notify>,
 ) -> Result<()> {
-    // Build request
+    // Set up request with byte range support for resume
     let mut request = http
         .get(url)
         .header("Range", format!("bytes={resume_offset}-"))
@@ -431,12 +431,12 @@ async fn run_download(
         response.content_length().map(|cl| cl + resume_offset)
     };
 
-    // Ensure parent directory exists
+    // Make sure the destination folder is ready
     if let Some(parent) = file_path.parent() {
         let _ = fs::create_dir_all(parent).await;
     }
 
-    // Open file — append if resuming, create new otherwise
+    // Open file: append if resuming an earlier attempt, otherwise create fresh
     let mut file = if resume_offset > 0 {
         fs::OpenOptions::new()
             .write(true)
@@ -456,7 +456,7 @@ async fn run_download(
     let mut bytes_since_last_update: u64 = 0;
     let mut current_speed: u64;
 
-    // Update status to Downloading
+    // Mark as downloading in state
     {
         let mut entries = entries.lock().await;
         if let Some(entry) = entries.iter_mut().find(|e| e.id == id) {
@@ -472,11 +472,11 @@ async fn run_download(
         tokio::select! {
             biased;
             _ = cancel.notified() => {
-                // Cancelled — status is set by the cancel_download method
+                // Cancelled — cancellation handler manages cleanup and status
                 return Ok(());
             }
             _ = pause.notified() => {
-                // Pause
+                // Paused — save our progress point
                 let mut entries = entries.lock().await;
                 if let Some(entry) = entries.iter_mut().find(|e| e.id == id) {
                     entry.status = DownloadStatus::Paused {
@@ -495,7 +495,7 @@ async fn run_download(
                         downloaded += bytes.len() as u64;
                         bytes_since_last_update += bytes.len() as u64;
 
-                        // Update progress every 500ms
+                        // Throttle progress updates to UI to twice per second
                         let elapsed = last_progress_update.elapsed();
                         if elapsed.as_millis() >= 500 {
                             current_speed = (bytes_since_last_update as f64 / elapsed.as_secs_f64()) as u64;
@@ -516,7 +516,7 @@ async fn run_download(
                         return Err(AppError::Message(format!("Download stream error: {e}")));
                     }
                     None => {
-                        // Stream finished — download complete
+                        // Finished receiving all data
                         file.flush().await.map_err(|e| AppError::Message(format!("File flush error: {e}")))?;
                         let mut entries = entries.lock().await;
                         if let Some(entry) = entries.iter_mut().find(|e| e.id == id) {
@@ -532,7 +532,7 @@ async fn run_download(
     }
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
+// Utility helpers
 
 fn sanitize_filename(raw: &str) -> String {
     let sanitized: String = raw
@@ -549,7 +549,7 @@ fn sanitize_filename(raw: &str) -> String {
     if trimmed.is_empty() {
         "download".to_owned()
     } else {
-        // Limit filename length to 200 chars
+        // Keep filename length reasonable
         trimmed.chars().take(200).collect()
     }
 }
@@ -564,7 +564,7 @@ fn url_extension(url: &str) -> &str {
             "mkv" => "mkv",
             "avi" => "avi",
             "webm" => "webm",
-            "m3u8" => "mp4", // HLS streams → save as mp4
+            "m3u8" => "mp4", // Save HLS streams as mp4 containers
             _ => "mp4",
         }
     } else {

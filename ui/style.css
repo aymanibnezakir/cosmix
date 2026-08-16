@@ -627,7 +627,7 @@ main {
     background: #4f5058;
 }
 
-/* ── Language selection modal ── */
+/* Language selection modal */
 
 .language-dialog {
     width: min(360px, 88vw);
@@ -699,7 +699,7 @@ main {
     font-weight: 600;
 }
 
-/* ── Stream entry (Play + Download) ── */
+/* Stream entry (Play + Download) */
 
 .stream-entry {
     background: #1e1f24;
@@ -779,7 +779,7 @@ main {
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), 0 0 16px rgba(127, 218, 131, 0.35);
 }
 
-/* ── Downloads dialog ── */
+/* Downloads dialog */
 
 .downloads-dialog {
     width: min(720px, 92vw);
@@ -868,7 +868,7 @@ main {
     color: #888
 }
 
-/* ── Progress bar ── */
+/* Progress bar */
 
 .dl-progress {
     height: 6px;
@@ -912,7 +912,7 @@ main {
     }
 }
 
-/* ── Download actions ── */
+/* Download actions */
 
 .dl-actions {
     display: flex;
@@ -995,7 +995,7 @@ main {
     background: #303033
 }
 
-/* ── Header right ── */
+/* Header right */
 
 .header-right {
     justify-self: end;

@@ -83,7 +83,6 @@ pub fn client_token(timestamp: u128) -> String {
 }
 
 /// Build the MovieBox HMAC-MD5 header from the canonical request format
-/// described in moviebox_tui_deep_analysis.txt.
 pub fn request_signature(
     method: &Method,
     canonical_url: &str,
