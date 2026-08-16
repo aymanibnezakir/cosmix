@@ -19,7 +19,7 @@
 
 **CosmiX** is a desktop application that provides a unified, ad-free interface to search movies and TV series across various streaming providers, browse detailed media metadata, select audio tracks & resolutions, and either **stream directly in VLC Media Player** or **download files locally** using an integrated, persistent download manager.
 
-Its biggest strength lies in **seamless provider unification** and **zero ad bloat**—aggregating completely different streaming sources under a single, cohesive interface while entirely bypassing web pop-ups, redirects, captchas, and trackers via native backend Rust scrapers.
+Its biggest strength lies in **seamless provider unification** and **zero ad bloat**: aggregating completely different streaming sources under a single, cohesive interface while entirely bypassing web pop-ups, redirects, captchas, and trackers via native backend Rust scrapers.
 
 Built natively in **Rust** with **Tauri v2**, CosmiX is extremely lightweight on system resources, starts up instantly, and features a dark-themed glassmorphism interface.
 
@@ -27,12 +27,12 @@ Built natively in **Rust** with **Tauri v2**, CosmiX is extremely lightweight on
 
 ## Features
 
-- **Unified Media Search** — Instant search across multiple providers with smart query filtering.
-- **Direct VLC Streaming** — Launches streams straight into VLC Media Player with all required authentication headers and streaming preflights handled automatically.
-- **Persistent Download Manager** — Download and manage media locally.
-- **Multi-Audio & Dub Selector** — Choose between Original Audio and various dubbed audio tracks.
-- **Full TV Series & Season Navigation** — Clean season-by-season episode grid selector.
-- **Zero Ad Bloat** — Bypasses web redirects, pop-ups, and trackers directly via backend Rust scrapers.
+- **Unified Media Search**: Instant search across multiple providers with smart query filtering.
+- **Direct VLC Streaming**: Launches streams straight into VLC Media Player with all required authentication headers and streaming preflights handled automatically.
+- **Persistent Download Manager**: Download and manage media locally.
+- **Multi-Audio & Dub Selector**: Choose between Original Audio and various dubbed audio tracks.
+- **Full TV Series & Season Navigation**: Clean season-by-season episode grid selector.
+- **Zero Ad Bloat**: Bypasses web redirects, pop-ups, and trackers directly via backend Rust scrapers.
 
 ---
 
@@ -43,7 +43,7 @@ CosmiX features a modular provider architecture. You can switch between provider
 | Provider | Speed | Quality | Best For | Description |
 | :--- | :---: | :---: | :--- | :--- |
 | **MovieBox** *(Default)* | Fast | 1080p / 720p | General Movies & Series | Emulates signed Android client requests with HMAC-MD5 encryption, device profile tokens, multiple audio dub options, and clean title deduplication. |
-| **BDIX – CircleFTP** | Gigabit | Direct / 1080p | BDIX / Local ISP Users | Direct JSON API integration with CircleFTP servers for high-speed local peering streaming in Bangladesh/BDIX networks. |
+| **BDIX : CircleFTP** | Gigabit | Direct / 1080p | BDIX / Local ISP Users | Direct JSON API integration with CircleFTP servers for high-speed local peering streaming in Bangladesh/BDIX networks. |
 | **4KHDHub** | Moderate | 4K / 1080p Remux | Cinephiles & 4K Rips | Advanced scraper that resolves HubCloud, HubDrive, and PixelDrain mirrors, preflighting direct video streams with custom playback headers. |
 
 ---
@@ -52,11 +52,11 @@ CosmiX features a modular provider architecture. You can switch between provider
 
 CosmiX is continuously expanding its provider ecosystem. Future releases will include:
 
-- [ ] **Additional BDIX / Local FTP Sources** — Expanding local peering options (e.g. SamOnline, RoarZone, ICC).
-- [ ] **Debrid & Torrent Integration** — Real-Debrid / AllDebrid stream resolver for multi-source torrent caching.
-- [ ] **Public Video Hosting Scrapers** — Integrations with popular community streaming backends.
-- [ ] **Subtitles Integration** — Auto-fetching `.srt` subtitles directly into the media player.
-- [ ] **Custom Video Player Selection** — Support for `mpv`, `MPC-HC`, and `PotPlayer` in addition to VLC.
+- [ ] **Additional BDIX / Local FTP Sources**: Expanding local peering options (e.g. SamOnline, RoarZone, ICC).
+- [ ] **Debrid & Torrent Integration**: Real-Debrid / AllDebrid stream resolver for multi-source torrent caching.
+- [ ] **Public Video Hosting Scrapers**: Integrations with popular community streaming backends.
+- [ ] **Subtitles Integration**: Auto-fetching `.srt` subtitles directly into the media player.
+- [ ] **Custom Video Player Selection**: Support for `mpv`, `MPC-HC`, and `PotPlayer` in addition to VLC.
 
 ---
 
