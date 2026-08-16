@@ -7,6 +7,7 @@ use std::{
 
 use futures_util::StreamExt;
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use tokio::{
     fs,
     io::AsyncWriteExt,
@@ -77,7 +78,7 @@ impl DownloadEntry {
                     downloaded: *downloaded,
                     total: *total,
                 },
-                DownloadStatus::Completed { size, .. } => DownloadStatusInfo::Completed {
+                DownloadStatus::Completed { size } => DownloadStatusInfo::Completed {
                     size: *size,
                 },
                 DownloadStatus::Failed { error } => DownloadStatusInfo::Failed {
@@ -88,6 +89,150 @@ impl DownloadEntry {
             file_path: self.file_path.to_string_lossy().into_owned(),
         }
     }
+}
+
+// Persistence model
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PersistedDownloadEntry {
+    id: String,
+    title: String,
+    episode_label: Option<String>,
+    resolution: String,
+    status: PersistedDownloadStatus,
+    url: String,
+    headers: Vec<StreamHeader>,
+    file_path: PathBuf,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+enum PersistedDownloadStatus {
+    Queued,
+    Downloading {
+        downloaded: u64,
+        total: Option<u64>,
+    },
+    Paused {
+        downloaded: u64,
+        total: Option<u64>,
+    },
+    Completed {
+        size: u64,
+    },
+    Failed {
+        error: String,
+    },
+    Cancelled,
+}
+
+fn storage_path() -> PathBuf {
+    dirs::data_dir()
+        .or_else(dirs::config_dir)
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("CosmiX")
+        .join("downloads.json")
+}
+
+fn save_entries_to_disk(entries: &[DownloadEntry]) {
+    let path = storage_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let persisted: Vec<PersistedDownloadEntry> = entries
+        .iter()
+        .map(|e| PersistedDownloadEntry {
+            id: e.id.clone(),
+            title: e.title.clone(),
+            episode_label: e.episode_label.clone(),
+            resolution: e.resolution.clone(),
+            status: match &e.status {
+                DownloadStatus::Queued => PersistedDownloadStatus::Queued,
+                DownloadStatus::Downloading {
+                    downloaded, total, ..
+                } => PersistedDownloadStatus::Downloading {
+                    downloaded: *downloaded,
+                    total: *total,
+                },
+                DownloadStatus::Paused { downloaded, total } => {
+                    PersistedDownloadStatus::Paused {
+                        downloaded: *downloaded,
+                        total: *total,
+                    }
+                }
+                DownloadStatus::Completed { size } => {
+                    PersistedDownloadStatus::Completed { size: *size }
+                }
+                DownloadStatus::Failed { error } => PersistedDownloadStatus::Failed {
+                    error: error.clone(),
+                },
+                DownloadStatus::Cancelled => PersistedDownloadStatus::Cancelled,
+            },
+            url: e.url.clone(),
+            headers: e.headers.clone(),
+            file_path: e.file_path.clone(),
+        })
+        .collect();
+
+    if let Ok(json) = serde_json::to_string_pretty(&persisted) {
+        let _ = std::fs::write(&path, json);
+    }
+}
+
+fn load_entries_from_disk() -> Vec<DownloadEntry> {
+    let path = storage_path();
+    if !path.exists() {
+        return Vec::new();
+    }
+    let Ok(data) = std::fs::read_to_string(&path) else {
+        return Vec::new();
+    };
+    let Ok(persisted) = serde_json::from_str::<Vec<PersistedDownloadEntry>>(&data) else {
+        return Vec::new();
+    };
+
+    persisted
+        .into_iter()
+        .map(|p| {
+            let actual_file_size = std::fs::metadata(&p.file_path).map(|m| m.len()).ok();
+            let status = match p.status {
+                PersistedDownloadStatus::Queued => DownloadStatus::Queued,
+                PersistedDownloadStatus::Downloading { downloaded, total } => {
+                    // Active downloads from a previous session are loaded as Paused at current byte offset
+                    let actual_downloaded = actual_file_size.unwrap_or(downloaded);
+                    DownloadStatus::Paused {
+                        downloaded: actual_downloaded,
+                        total,
+                    }
+                }
+                PersistedDownloadStatus::Paused { downloaded, total } => {
+                    let actual_downloaded = actual_file_size.unwrap_or(downloaded);
+                    DownloadStatus::Paused {
+                        downloaded: actual_downloaded,
+                        total,
+                    }
+                }
+                PersistedDownloadStatus::Completed { size } => {
+                    let actual_size = actual_file_size.unwrap_or(size);
+                    DownloadStatus::Completed { size: actual_size }
+                }
+                PersistedDownloadStatus::Failed { error } => DownloadStatus::Failed { error },
+                PersistedDownloadStatus::Cancelled => DownloadStatus::Cancelled,
+            };
+
+            DownloadEntry {
+                id: p.id,
+                title: p.title,
+                episode_label: p.episode_label,
+                resolution: p.resolution,
+                status,
+                url: p.url,
+                headers: p.headers,
+                file_path: p.file_path,
+            }
+        })
+        .collect()
 }
 
 // Download manager and lifecycle
@@ -112,8 +257,10 @@ impl DownloadManager {
             .build()
             .expect("download HTTP client");
 
+        let loaded = load_entries_from_disk();
+
         Self {
-            entries: Arc::new(Mutex::new(Vec::new())),
+            entries: Arc::new(Mutex::new(loaded)),
             tasks: Arc::new(Mutex::new(HashMap::new())),
             http,
         }
@@ -147,7 +294,9 @@ impl DownloadManager {
         }
 
         let id = uuid::Uuid::new_v4().to_string();
-        let file_path = self.build_file_path(&title, episode_label.as_deref(), &resolution, &url).await;
+        let file_path = self
+            .build_file_path(&title, episode_label.as_deref(), &resolution, &url)
+            .await;
 
         let entry = DownloadEntry {
             id: id.clone(),
@@ -160,7 +309,11 @@ impl DownloadManager {
             file_path: file_path.clone(),
         };
 
-        self.entries.lock().await.push(entry);
+        {
+            let mut entries = self.entries.lock().await;
+            entries.insert(0, entry);
+            save_entries_to_disk(&entries);
+        }
 
         self.spawn_download_task(id.clone(), url, headers, file_path, 0)
             .await;
@@ -174,26 +327,45 @@ impl DownloadManager {
             handle.pause.notify_one();
             Ok(())
         } else {
+            let mut entries = self.entries.lock().await;
+            if let Some(entry) = entries.iter_mut().find(|e| e.id == id) {
+                if matches!(entry.status, DownloadStatus::Queued) {
+                    entry.status = DownloadStatus::Paused {
+                        downloaded: 0,
+                        total: None,
+                    };
+                    save_entries_to_disk(&entries);
+                    return Ok(());
+                }
+            }
             Err(AppError::Message("Download task not found.".into()))
         }
     }
 
     pub async fn resume_download(&self, id: &str) -> Result<()> {
         let (url, headers, file_path, downloaded) = {
-            let entries = self.entries.lock().await;
+            let mut entries = self.entries.lock().await;
             let entry = entries
-                .iter()
+                .iter_mut()
                 .find(|e| e.id == id)
                 .ok_or_else(|| AppError::Message("Download not found.".into()))?;
-            match &entry.status {
-                DownloadStatus::Paused { downloaded, .. } => (
-                    entry.url.clone(),
-                    entry.headers.clone(),
-                    entry.file_path.clone(),
-                    *downloaded,
-                ),
+            let res = match &entry.status {
+                DownloadStatus::Paused { downloaded, total } => {
+                    let resume_from = *downloaded;
+                    let url = entry.url.clone();
+                    let headers = entry.headers.clone();
+                    let file_path = entry.file_path.clone();
+                    entry.status = DownloadStatus::Downloading {
+                        downloaded: resume_from,
+                        total: *total,
+                        speed_bps: 0,
+                    };
+                    (url, headers, file_path, resume_from)
+                }
                 _ => return Err(AppError::Message("Download is not paused.".into())),
-            }
+            };
+            save_entries_to_disk(&entries);
+            res
         };
 
         self.spawn_download_task(id.to_owned(), url, headers, file_path, downloaded)
@@ -216,6 +388,7 @@ impl DownloadManager {
             entry.status = DownloadStatus::Cancelled;
             // Clean up the incomplete file on disk
             let _ = fs::remove_file(&partial_path).await;
+            save_entries_to_disk(&entries);
         }
 
         self.tasks.lock().await.remove(id);
@@ -239,6 +412,7 @@ impl DownloadManager {
             if !matches!(entry.status, DownloadStatus::Completed { .. }) {
                 let _ = fs::remove_file(&entry.file_path).await;
             }
+            save_entries_to_disk(&entries);
         }
         Ok(())
     }
@@ -250,17 +424,18 @@ impl DownloadManager {
                 .iter_mut()
                 .find(|e| e.id == id)
                 .ok_or_else(|| AppError::Message("Download not found.".into()))?;
-            match &entry.status {
+            let res = match &entry.status {
                 DownloadStatus::Failed { .. } | DownloadStatus::Cancelled => {
+                    let url = entry.url.clone();
+                    let headers = entry.headers.clone();
+                    let file_path = entry.file_path.clone();
                     entry.status = DownloadStatus::Queued;
-                    (
-                        entry.url.clone(),
-                        entry.headers.clone(),
-                        entry.file_path.clone(),
-                    )
+                    (url, headers, file_path)
                 }
                 _ => return Err(AppError::Message("Download cannot be retried.".into())),
-            }
+            };
+            save_entries_to_disk(&entries);
+            res
         };
 
         // Wipe any incomplete file before starting fresh
@@ -330,6 +505,7 @@ impl DownloadManager {
                         entry.status = DownloadStatus::Failed {
                             error: error.to_string(),
                         };
+                        save_entries_to_disk(&entries);
                     }
                 }
             }
@@ -453,6 +629,7 @@ async fn run_download(
     let mut downloaded = resume_offset;
     let mut stream = response.bytes_stream();
     let mut last_progress_update = Instant::now();
+    let mut last_disk_save = Instant::now();
     let mut bytes_since_last_update: u64 = 0;
     let mut current_speed: u64;
 
@@ -465,6 +642,7 @@ async fn run_download(
                 total,
                 speed_bps: 0,
             };
+            save_entries_to_disk(&entries);
         }
     }
 
@@ -483,6 +661,7 @@ async fn run_download(
                         downloaded,
                         total,
                     };
+                    save_entries_to_disk(&entries);
                 }
                 return Ok(());
             }
@@ -510,6 +689,11 @@ async fn run_download(
                                     speed_bps: current_speed,
                                 };
                             }
+
+                            if last_disk_save.elapsed().as_secs() >= 5 {
+                                last_disk_save = Instant::now();
+                                save_entries_to_disk(&entries);
+                            }
                         }
                     }
                     Some(Err(e)) => {
@@ -523,6 +707,7 @@ async fn run_download(
                             entry.status = DownloadStatus::Completed {
                                 size: downloaded,
                             };
+                            save_entries_to_disk(&entries);
                         }
                         return Ok(());
                     }
@@ -593,7 +778,8 @@ pub fn open_in_explorer(path: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{sanitize_filename, url_extension};
+    use super::{sanitize_filename, url_extension, DownloadEntry, DownloadStatus};
+    use std::path::PathBuf;
 
     #[test]
     fn sanitizes_filenames_with_invalid_characters() {
@@ -617,5 +803,74 @@ mod tests {
             "mp4"
         );
         assert_eq!(url_extension("https://cdn.example.com/stream"), "mp4");
+    }
+
+    #[test]
+    fn new_downloads_ordered_at_top() {
+        let mut entries = Vec::new();
+        let entry1 = DownloadEntry {
+            id: "1".into(),
+            title: "First".into(),
+            episode_label: None,
+            resolution: "1080p".into(),
+            status: DownloadStatus::Completed { size: 100 },
+            url: "https://example.com/1.mp4".into(),
+            headers: vec![],
+            file_path: PathBuf::from("first.mp4"),
+        };
+        let entry2 = DownloadEntry {
+            id: "2".into(),
+            title: "Second".into(),
+            episode_label: None,
+            resolution: "1080p".into(),
+            status: DownloadStatus::Queued,
+            url: "https://example.com/2.mp4".into(),
+            headers: vec![],
+            file_path: PathBuf::from("second.mp4"),
+        };
+
+        entries.insert(0, entry1);
+        entries.insert(0, entry2);
+
+        assert_eq!(entries[0].id, "2");
+        assert_eq!(entries[1].id, "1");
+    }
+
+    #[test]
+    fn test_persisted_downloads_serde_and_restoration() {
+        use super::{PersistedDownloadEntry, PersistedDownloadStatus};
+
+        let persisted = vec![
+            PersistedDownloadEntry {
+                id: "1".into(),
+                title: "Movie A".into(),
+                episode_label: None,
+                resolution: "1080p".into(),
+                status: PersistedDownloadStatus::Downloading {
+                    downloaded: 500,
+                    total: Some(1000),
+                },
+                url: "https://example.com/a.mp4".into(),
+                headers: vec![],
+                file_path: PathBuf::from("a.mp4"),
+            },
+            PersistedDownloadEntry {
+                id: "2".into(),
+                title: "Series B".into(),
+                episode_label: Some("S01E01".into()),
+                resolution: "720p".into(),
+                status: PersistedDownloadStatus::Completed { size: 2000 },
+                url: "https://example.com/b.mp4".into(),
+                headers: vec![],
+                file_path: PathBuf::from("b.mp4"),
+            },
+        ];
+
+        let json = serde_json::to_string(&persisted).unwrap();
+        let restored: Vec<PersistedDownloadEntry> = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(restored.len(), 2);
+        assert_eq!(restored[0].title, "Movie A");
+        assert_eq!(restored[1].episode_label, Some("S01E01".into()));
     }
 }
