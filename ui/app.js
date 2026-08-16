@@ -359,8 +359,8 @@ async function refreshDownloads() {
             }
         });
 
-        // Insert or update entries in-place to prevent hover flicker
-        for (const dl of downloads) {
+        // Insert or update entries in-place to prevent hover flicker while keeping newest-first order
+        downloads.forEach((dl, index) => {
             const s = dl.status;
             let el = container.querySelector(`.download-entry[data-id="${dl.id}"]`);
             if (!el) {
@@ -369,7 +369,6 @@ async function refreshDownloads() {
                 el.dataset.id = dl.id;
                 el.dataset.statusKind = s.kind;
                 el.innerHTML = renderDownloadContent(dl);
-                container.appendChild(el);
             } else {
                 if (el.dataset.statusKind !== s.kind) {
                     el.dataset.statusKind = s.kind;
@@ -390,7 +389,16 @@ async function refreshDownloads() {
                     if (speedEl) speedEl.textContent = `${formatSpeed(s.speedBps ?? s.speed_bps)} · ${sizeText}`;
                 }
             }
-        }
+
+            const currentEntries = container.querySelectorAll(".download-entry");
+            if (currentEntries[index] !== el) {
+                if (index < currentEntries.length) {
+                    container.insertBefore(el, currentEntries[index]);
+                } else {
+                    container.appendChild(el);
+                }
+            }
+        });
     } catch (e) { /* silently ignore poll errors */ }
 }
 
