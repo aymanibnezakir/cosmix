@@ -1,4 +1,16 @@
 import { invoke } from "https://unpkg.com/@tauri-apps/api@2/core";
+
+/* ── Splash screen ── */
+{
+    const splash = document.getElementById("splash");
+    const MIN_SPLASH_MS = 1500;
+
+    setTimeout(() => {
+        splash.classList.add("splash-hidden");
+        splash.addEventListener("transitionend", () => splash.remove(), { once: true });
+    }, MIN_SPLASH_MS);
+}
+
 const $ = s => document.querySelector(s), savedProvider = (localStorage.provider || "moviebox").toLowerCase(), state = { provider: ["moviebox", "fourkhdhub", "circleftp"].includes(savedProvider) ? savedProvider : "moviebox", details: null };
 const providerNames = { moviebox: "MovieBox", fourkhdhub: "4KHDHub", circleftp: "CircleFTP" };
 function updateWelcomeSubtitle() {

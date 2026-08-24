@@ -9,10 +9,21 @@ mod providers;
 mod state;
 
 use state::AppState;
+use tauri::Manager;
 
 fn main() {
     tauri::Builder::default()
         .manage(AppState::new())
+        .setup(|app| {
+            // Show the window after a brief delay so the WebView has time to
+            // render the dark-background HTML, eliminating the white flash.
+            let window = app.get_webview_window("main").expect("main window");
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(300));
+                let _ = window.show();
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::search,
             commands::get_details,

@@ -14,6 +14,99 @@
     --cyan-glow: rgba(94, 196, 232, 0.35);
 }
 
+/* ── Splash Screen ── */
+
+.splash {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+        radial-gradient(ellipse 60% 50% at 50% 45%, rgba(60, 45, 15, 0.5) 0%, transparent 70%),
+        var(--bg);
+    transition: opacity 0.5s ease, visibility 0.5s ease;
+}
+
+.splash.splash-hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.splash-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    animation: splash-enter 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes splash-enter {
+    from {
+        opacity: 0;
+        transform: scale(0.85) translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.splash-logo {
+    width: 88px;
+    height: 88px;
+    border-radius: 20px;
+    filter: drop-shadow(0 0 30px rgba(244, 195, 79, 0.55))
+           drop-shadow(0 0 60px rgba(244, 195, 79, 0.25));
+    animation: splash-logo-pulse 2.5s ease-in-out infinite alternate;
+}
+
+@keyframes splash-logo-pulse {
+    0%   { filter: drop-shadow(0 0 24px rgba(244, 195, 79, 0.4)) drop-shadow(0 0 48px rgba(244, 195, 79, 0.15)); transform: scale(1); }
+    100% { filter: drop-shadow(0 0 38px rgba(244, 195, 79, 0.7)) drop-shadow(0 0 75px rgba(244, 195, 79, 0.35)); transform: scale(1.05); }
+}
+
+.splash-brand {
+    font-family: "Ubuntu Sans", sans-serif;
+    font-weight: 700;
+    font-size: 32px;
+    letter-spacing: -0.5px;
+    color: var(--text);
+}
+
+.splash-brand span {
+    color: var(--accent);
+    font-family: sans-serif;
+    font-size: 22px;
+    text-shadow: 0 0 14px var(--accent-glow), 0 0 28px rgba(244, 195, 79, 0.2);
+}
+
+.splash-loader {
+    width: 160px;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 4px;
+}
+
+.splash-loader-bar {
+    height: 100%;
+    width: 40%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    animation: splash-loader-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes splash-loader-slide {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(400%); }
+}
+
+/* ── End Splash Screen ── */
+
 * {
     box-sizing: border-box
 }
