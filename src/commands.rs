@@ -62,8 +62,8 @@ pub async fn get_streams(
 }
 
 #[tauri::command]
-pub fn play_in_vlc(url: String, headers: Option<Vec<StreamHeader>>) -> Result<()> {
-    launch_vlc(&url, &headers.unwrap_or_default())
+pub fn play_in_vlc(url: String, headers: Option<Vec<StreamHeader>>, title: String) -> Result<()> {
+    launch_vlc(&url, &headers.unwrap_or_default(), &title)
 }
 
 // Download commands

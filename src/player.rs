@@ -5,7 +5,7 @@ use crate::{
     models::StreamHeader,
 };
 
-pub fn launch_vlc(url: &str, headers: &[StreamHeader]) -> Result<()> {
+pub fn launch_vlc(url: &str, headers: &[StreamHeader], title: &str) -> Result<()> {
     let candidates = [
         r"C:\Program Files\VideoLAN\VLC\vlc.exe",
         r"C:\Program Files (x86)\VideoLAN\VLC\vlc.exe",
@@ -14,6 +14,8 @@ pub fn launch_vlc(url: &str, headers: &[StreamHeader]) -> Result<()> {
     for executable in candidates {
         let mut command = Command::new(executable);
         command.arg("--play-and-exit");
+        command.arg("--no-video-title-show");
+        command.arg(format!("--meta-title={}", title));
         for header in headers {
             match header.name.to_ascii_lowercase().as_str() {
                 "referer" => {

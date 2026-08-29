@@ -29,7 +29,7 @@ pub async fn search(query: &str) -> Result<Vec<MediaItem>> {
     Ok(posts
         .iter()
         .filter_map(media_item)
-        .filter(|item| item.title.to_ascii_lowercase().contains(query_trimmed))
+        .filter(|item: &MediaItem| item.title.to_ascii_lowercase().contains(query_trimmed))
         .collect())
 }
 

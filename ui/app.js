@@ -306,7 +306,8 @@ async function streams(season = null, episode = null, targetId = null) {
             b.onclick = async () => {
                 try {
                     const s = list[+b.dataset.i];
-                    await invoke("play_in_vlc", { url: s.url, headers: s.headers });
+                    const vlcTitle = episodeLabel ? `${d.title} - ${episodeLabel}` : d.title;
+                    await invoke("play_in_vlc", { url: s.url, headers: s.headers, title: vlcTitle });
                     toast("Opening VLC…");
                 } catch (e) { toast(String(e)); }
             };
