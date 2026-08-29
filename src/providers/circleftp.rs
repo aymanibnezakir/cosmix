@@ -10,18 +10,26 @@ const API_BASE: &str = "http://new.circleftp.net:5000/api";
 const UPLOADS_BASE: &str = "http://new.circleftp.net:5000/uploads";
 
 pub async fn search(query: &str) -> Result<Vec<MediaItem>> {
-    let response: Value = Client::new()
+    let mut response: Value = Client::new()
         .get(format!("{API_BASE}/posts"))
         .query(&[("searchTerm", query), ("order", "desc")])
         .send()
         .await?
         .json()
         .await?;
-    let posts = response["posts"]
-        .as_array()
-        .or(response.as_array())
-        .cloned()
+    let mut posts = response["posts"]
+        .as_array_mut()
+        .map(std::mem::take)
+        .or_else(|| response.as_array_mut().map(std::mem::take))
         .unwrap_or_default();
+
+    for post in &mut posts {
+        if post["type"] == "singleVideo" {
+            post["type"] = Value::String("Movie".to_owned());
+        } else if post["type"] == "series" {
+            post["type"] = Value::String("Series".to_owned());
+        }
+    }
 
     let query_lower = query.to_ascii_lowercase();
     let query_trimmed = query_lower.trim();
@@ -29,15 +37,22 @@ pub async fn search(query: &str) -> Result<Vec<MediaItem>> {
     Ok(posts
         .iter()
         .filter_map(media_item)
-        .filter(|item: &MediaItem| item.title.to_ascii_lowercase().contains(query_trimmed))
+        .filter(|item: &MediaItem| (item.title.to_ascii_lowercase().contains(query_trimmed)) && (item.kind == "Movie" || item.kind == "Series"))
         .collect())
 }
 
 pub async fn details(id: &str) -> Result<Details> {
     let post = post(id).await?;
-    let kind = post["type"].as_str().unwrap_or("movie").to_owned();
+    let post_type = post["type"].as_str().unwrap_or_default();
+    let kind = if post_type == "singleVideo" {
+        "Movie".to_owned()
+    } else if post_type == "series" {
+        "Series".to_owned()
+    } else {
+        post_type.to_owned()
+    };
     let episodes =
-        if kind == "series" {
+        if kind == "Series" {
             post["content"]
                 .as_array()
                 .into_iter()
@@ -129,6 +144,15 @@ async fn post(id: &str) -> Result<Value> {
 }
 
 fn media_item(post: &Value) -> Option<MediaItem> {
+    let post_type = post["type"].as_str().unwrap_or_default();
+    let kind = if post_type == "singleVideo" || post_type == "Movie" {
+        "Movie".to_owned()
+    } else if post_type == "series" || post_type == "Series" {
+        "Series".to_owned()
+    } else {
+        post_type.to_owned()
+    };
+
     Some(MediaItem {
         id: value_text(&post["_id"]).or_else(|| value_text(&post["id"]))?,
         title: post["title"]
@@ -136,7 +160,7 @@ fn media_item(post: &Value) -> Option<MediaItem> {
             .or(post["name"].as_str())
             .unwrap_or("Untitled")
             .to_owned(),
-        kind: post["type"].as_str().unwrap_or("movie").to_owned(),
+        kind,
         year: value_text(&post["year"]).unwrap_or_else(|| "—".into()),
         poster: post["image"].as_str().map(poster_url),
         seasons: 0,
@@ -225,5 +249,24 @@ mod tests {
 
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].title, "The Mentalist");
+    }
+
+    #[test]
+    fn maps_post_types_to_movie_and_series() {
+        let movie_post = serde_json::json!({
+            "_id": "m1",
+            "title": "Movie Title",
+            "type": "singleVideo"
+        });
+        let movie_item = super::media_item(&movie_post).unwrap();
+        assert_eq!(movie_item.kind, "Movie");
+
+        let series_post = serde_json::json!({
+            "_id": "s1",
+            "title": "Series Title",
+            "type": "series"
+        });
+        let series_item = super::media_item(&series_post).unwrap();
+        assert_eq!(series_item.kind, "Series");
     }
 }
