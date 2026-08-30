@@ -356,7 +356,7 @@ async function refreshDownloads() {
         const downloads = await invoke("get_downloads");
         const container = $("#downloadList");
         if (!downloads.length) {
-            container.innerHTML = "<p class='hint'>No downloads yet.</p>";
+            container.innerHTML = "<p class='hint'>Nothing to show...</p>";
             return;
         }
 
