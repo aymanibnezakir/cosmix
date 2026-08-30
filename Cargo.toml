@@ -1,6 +1,6 @@
 [package]
 name = "cosmix"
-version = "1.9.2"
+version = "1.9.6"
 edition = "2024"
 
 [dependencies]
